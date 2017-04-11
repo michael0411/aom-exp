@@ -252,6 +252,7 @@ EXPERIMENT_LIST="
     ref_mv
     tpl_mv
     dual_filter
+    short_filter
     convolve_round
     ext_tx
     tx64x64
