@@ -297,6 +297,23 @@ InterpFilterParams av1_get_interp_filter_params(
   return av1_interp_filter_params_list[interp_filter];
 }
 
+#if CONFIG_SHORT_FILTER
+InterpFilterParams av1_get_interp_filter_params_with_block_size(
+	const InterpFilter interp_filter, const int w, const int h
+) {
+	if (w == 2 || h == 2)
+		return av1_interp_filter_params_list[BILINEAR];
+	else if (w == 4 || h == 4)
+		return av1_interp_filter_params_list[(interp_filter == MULTITAP_SHARP) ? EIGHTTAP_REGULAR : interp_filter];
+
+#if USE_TEMPORALFILTER_12TAP
+	if (interp_filter == TEMPORALFILTER_12TAP)
+		return av1_interp_temporalfilter_12tap;
+#endif  // USE_TEMPORALFILTER_12TAP
+	return av1_interp_filter_params_list[interp_filter];
+}
+#endif
+
 const int16_t *av1_get_interp_filter_kernel(const InterpFilter interp_filter) {
 #if USE_TEMPORALFILTER_12TAP
   if (interp_filter == TEMPORALFILTER_12TAP)

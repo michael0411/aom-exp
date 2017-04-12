@@ -302,14 +302,12 @@ void av1_convolve(const uint8_t *src, int src_stride, uint8_t *dst,
   InterpFilterParams filter_params_y =
       av1_get_interp_filter_params(interp_filter[0 + 2 * conv_params->ref]);
   InterpFilterParams filter_params;
+#elif CONFIG_SHORT_FILTER
+  InterpFilterParams filter_params =
+	  av1_get_interp_filter_params_with_block_size(interp_filter, w, h);
 #else
   InterpFilterParams filter_params =
       av1_get_interp_filter_params(interp_filter);
-#endif
-#if CONFIG_SHORT_FILTER
-  if (w < 4 || h < 4) {
-	  filter_params = av1_get_interp_filter_params(BILINEAR);
-  }
 #endif
 
   assert(conv_params->round == CONVOLVE_OPT_ROUND);

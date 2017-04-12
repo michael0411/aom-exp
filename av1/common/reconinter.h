@@ -44,6 +44,9 @@ static INLINE void inter_predictor(const uint8_t *src, int src_stride,
       av1_get_interp_filter_params(filter_x);
   InterpFilterParams interp_filter_params_y =
       av1_get_interp_filter_params(filter_y);
+#elif CONFIG_SHORT_FILTER
+	InterpFilterParams interp_filter_params =
+		av1_get_interp_filter_params_with_block_size(interp_filter, w, h);
 #else
   InterpFilterParams interp_filter_params =
       av1_get_interp_filter_params(interp_filter);
