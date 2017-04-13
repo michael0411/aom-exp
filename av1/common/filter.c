@@ -320,9 +320,9 @@ InterpFilterParams av1_get_interp_filter_params(
 InterpFilterParams av1_get_interp_filter_params_with_block_size(
 	const InterpFilter interp_filter, const int w, const int h
 ) {
-	if (w == 2 || h == 2 || interp_filter == BILINEAR)
+	if (w <= 2 || h <= 2)
 		return av1_interp_filter_params_list[BILINEAR];
-	else if (w == 4 || h == 4)
+	else if ((w <= 4 || h <= 4) && interp_filter == EIGHTTAP_REGULAR)
 		return av1_interp_4tap;
 
 #if USE_TEMPORALFILTER_12TAP
