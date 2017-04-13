@@ -185,6 +185,7 @@ DECLARE_ALIGNED(256, static const InterpKernel,
 #endif
 };
 
+
 DECLARE_ALIGNED(256, static const InterpKernel,
                 sub_pel_filters_8sharp[SUBPEL_SHIFTS]) = {
 #if CONFIG_FILTER_7BIT
@@ -231,6 +232,24 @@ DECLARE_ALIGNED(256, static const InterpKernel,
 #endif
 };
 #endif  // CONFIG_DUAL_FILTER
+
+#if CONFIG_SHORT_FILTER
+DECLARE_ALIGNED(256, static const InterpKernel,
+sub_pel_filters_4[SUBPEL_SHIFTS]) = {
+	{ 0, 0,   0, 128,  0,   0,   0, 0 },{ 0, 0, -3,  125,   8,   -2,   0, 0 },
+	{ 0, 0,  -6, 120, 17,  -4,   0, 0 },{ 0, 0, -8,  115,  27,   -6,   0, 0 },
+	{ 0, 0, -10, 108, 36,  -7,   0, 0 },{ 0, 0, -11, 101,  46,   -9,   0, 0 },
+	{ 0, 0, -12,  93, 56, -10,   0, 0 },{ 0, 0, -12,  84,  66,  -11,   0, 0 },
+	{ 0, 0, -12,  75, 75, -12,   0, 0 },{ 0, 0, -11,  66,  84,  -12,   0, 0 },
+	{ 0, 0, -10,  56, 93, -12,   0, 0 },{ 0, 0, -9,  46, 101,  -11,   0, 0 },
+	{ 0, 0,  -7,  36,108, -10,  0, 0 },{ 0, 0,  -6,  27, 115,   -8,   0, 0 },
+	{ 0, 0,  -4,  17,120,  -6,   0, 0 },{ 0, 0, -2,   8, 125,   -3,   0, 0 }
+};
+
+static const InterpFilterParams av1_interp_4tap = {
+	(const int16_t *)sub_pel_filters_4, SUBPEL_TAPS, SUBPEL_SHIFTS, FOURTAP_REGULAR
+};
+#endif
 
 #if CONFIG_EXT_INTRA
 #if CONFIG_INTRA_INTERP
@@ -301,10 +320,10 @@ InterpFilterParams av1_get_interp_filter_params(
 InterpFilterParams av1_get_interp_filter_params_with_block_size(
 	const InterpFilter interp_filter, const int w, const int h
 ) {
-	if (w == 2 || h == 2)
+	if (w == 2 || h == 2 || interp_filter == BILINEAR)
 		return av1_interp_filter_params_list[BILINEAR];
 	else if (w == 4 || h == 4)
-		return av1_interp_filter_params_list[(interp_filter == MULTITAP_SHARP) ? EIGHTTAP_REGULAR : interp_filter];
+		return av1_interp_4tap;
 
 #if USE_TEMPORALFILTER_12TAP
 	if (interp_filter == TEMPORALFILTER_12TAP)
