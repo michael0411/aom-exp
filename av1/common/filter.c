@@ -257,8 +257,9 @@ sub_pel_filters_4smooth[SUBPEL_SHIFTS]) = {
 	{ 0, 0, 4, 36, 62, 26, 0, 0 },{ 0, 0, 2, 34, 62, 30, 0, 0 }
 };
 
-static const InterpFilterParams av1_interp_4tap = {
-	(const int16_t *)sub_pel_filters_4, SUBPEL_TAPS, SUBPEL_SHIFTS, FOURTAP_REGULAR
+static const InterpFilterParams av1_interp_4tap[2] = {
+	{(const int16_t *)sub_pel_filters_4, SUBPEL_TAPS, SUBPEL_SHIFTS, FOURTAP_REGULAR},
+	{ (const int16_t *)sub_pel_filters_4smooth, SUBPEL_TAPS, SUBPEL_SHIFTS, FOURTAP_SMOOTH },
 };
 #endif
 
@@ -333,8 +334,8 @@ InterpFilterParams av1_get_interp_filter_params_with_block_size(
 ) {
 	if (w <= 2 || h <= 2)
 		return av1_interp_filter_params_list[BILINEAR];
-	else if ((w <= 4 || h <= 4) && interp_filter == EIGHTTAP_REGULAR)
-		return av1_interp_4tap;
+	else if ((w <= 4 || h <= 4) && interp_filter == EIGHTTAP_SMOOTH)
+		return av1_interp_4tap[1];
 
 #if USE_TEMPORALFILTER_12TAP
 	if (interp_filter == TEMPORALFILTER_12TAP)
