@@ -353,7 +353,11 @@ InterpFilterParams av1_get_interp_filter_params_with_block_size(
 		return av1_interp_4tap[0];
 	else if ((w <= 2 || h <= 2) && interp_filter == EIGHTTAP_SMOOTH)
 		return av1_interp_4tap[1];
+	else if ((w <= 4 || h <= 4) && interp_filter == MULTITAP_SHARP)
+		return av1_interp_filter_params_list[EIGHTTAP_REGULAR];
+
 #endif
+
 #if USE_TEMPORALFILTER_12TAP
 	if (interp_filter == TEMPORALFILTER_12TAP)
 		return av1_interp_temporalfilter_12tap;
