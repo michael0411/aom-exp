@@ -5755,7 +5755,11 @@ static void joint_motion_search(const AV1_COMP *cpi, MACROBLOCK *x,
 #else
     av1_build_inter_predictor(
         ref_yv12[!id].buf, ref_yv12[!id].stride, second_pred, pw,
-        &frame_mv[refs[!id]].as_mv, &sf, pw, ph, &conv_params, interp_filter,
+        &frame_mv[refs[!id]].as_mv, &sf, pw, ph, 
+#if CONFIG_SHORT_FILTER && !CONFIG_GLOBAL_MOTION
+		plane,
+#endif
+		&conv_params, interp_filter,
 #if CONFIG_GLOBAL_MOTION
         is_global[!id], p_col, p_row, plane, !id,
 #endif  // CONFIG_GLOBAL_MOTION

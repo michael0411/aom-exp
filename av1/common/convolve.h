@@ -78,6 +78,9 @@ void av1_convolve_rounding(const int32_t *src, int src_stride, uint8_t *dst,
 
 void av1_convolve(const uint8_t *src, int src_stride, uint8_t *dst,
                   int dst_stride, int w, int h,
+#if CONFIG_SHORT_FILTER
+				  int plane,
+#endif
 #if CONFIG_DUAL_FILTER
                   const InterpFilter *interp_filter,
 #else

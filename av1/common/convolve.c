@@ -286,7 +286,10 @@ void av1_convolve_2d_facade(const uint8_t *src, int src_stride, uint8_t *dst,
 #endif  // CONFIG_CONVOLVE_ROUND
 
 void av1_convolve(const uint8_t *src, int src_stride, uint8_t *dst,
-                  int dst_stride, int w, int h,
+                  int dst_stride, int w, int h, 
+#if CONFIG_SHORT_FILTER
+				  int plane,
+#endif
 #if CONFIG_DUAL_FILTER
                   const InterpFilter *interp_filter,
 #else
@@ -304,7 +307,7 @@ void av1_convolve(const uint8_t *src, int src_stride, uint8_t *dst,
   InterpFilterParams filter_params;
 #elif CONFIG_SHORT_FILTER
   InterpFilterParams filter_params =
-	  av1_get_interp_filter_params_with_block_size(interp_filter, w, h);
+	  av1_get_interp_filter_params_with_block_size(interp_filter, w, h, plane);
 #else
   InterpFilterParams filter_params =
       av1_get_interp_filter_params(interp_filter);

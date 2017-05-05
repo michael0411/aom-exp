@@ -340,7 +340,7 @@ InterpFilterParams av1_get_interp_filter_params(
 
 #if CONFIG_SHORT_FILTER
 InterpFilterParams av1_get_interp_filter_params_with_block_size(
-	const InterpFilter interp_filter, const int w, const int h
+	const InterpFilter interp_filter, const int w, const int h, const int plane
 ) {
 #if USE_TEMPORALFILTER_12TAP
 	if (interp_filter == TEMPORALFILTER_12TAP)
@@ -355,7 +355,7 @@ InterpFilterParams av1_get_interp_filter_params_with_block_size(
 	else if ((w <= 4 || h <= 4) && interp_filter == EIGHTTAP_SMOOTH)
 		return av1_interp_4tap[1];
 #else
-	if (w == 2 || h == 2) {
+	if (w == 2 || h == 2 || plane > 0) {
 		if (interp_filter == MULTITAP_SHARP || interp_filter == EIGHTTAP_REGULAR) {
 			return av1_interp_4tap[0];
 		}
