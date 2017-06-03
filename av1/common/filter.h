@@ -91,7 +91,7 @@ InterpFilterParams av1_get_interp_filter_params(
 
 #if CONFIG_SHORT_FILTER
 InterpFilterParams av1_get_interp_filter_params_with_block_size(
-	const InterpFilter interp_filter, const int w, const int h, const int plane
+	const InterpFilter interp_filter, const int w, const int h
 );
 #endif
 

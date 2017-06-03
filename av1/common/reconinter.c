@@ -847,10 +847,7 @@ void av1_highbd_build_inter_predictor(const uint8_t *src, int src_stride,
 
 void av1_build_inter_predictor(const uint8_t *src, int src_stride, uint8_t *dst,
                                int dst_stride, const MV *src_mv,
-                               const struct scale_factors *sf, int w, int h, 
-#if CONFIG_SHORT_FILTER && !CONFIG_GLOBAL_MOTION
-							   int plane,
-#endif
+                               const struct scale_factors *sf, int w, int h,
                                ConvolveParams *conv_params,
 #if CONFIG_DUAL_FILTER
                                const InterpFilter *interp_filter,
@@ -873,7 +870,7 @@ void av1_build_inter_predictor(const uint8_t *src, int src_stride, uint8_t *dst,
   src += (mv.row >> SUBPEL_BITS) * src_stride + (mv.col >> SUBPEL_BITS);
 
   av1_make_inter_predictor(src, src_stride, dst, dst_stride, subpel_x, subpel_y,
-                           sf, w, h, plane, conv_params, interp_filter,
+                           sf, w, h, conv_params, interp_filter,
 #if CONFIG_GLOBAL_MOTION
                            is_global, p_col, p_row, plane, ref,
 #if CONFIG_MOTION_VAR
@@ -1111,7 +1108,7 @@ void build_inter_predictors(MACROBLOCKD *xd, int plane,
 #endif  // CONFIG_EXT_INTER
         av1_make_inter_predictor(
             pre[ref], pre_buf->stride, dst, dst_buf->stride,
-            subpel_params[ref].subpel_x, subpel_params[ref].subpel_y, sf, w, h, plane,
+            subpel_params[ref].subpel_x, subpel_params[ref].subpel_y, sf, w, h,
             &conv_params, mi->mbmi.interp_filter,
 #if CONFIG_GLOBAL_MOTION
             is_global[ref], (mi_x >> pd->subsampling_x) + x,
@@ -1174,7 +1171,7 @@ void av1_build_inter_predictor_sub8x8(MACROBLOCKD *xd, int plane, int i, int ir,
 #endif  // CONFIG_AOM_HIGHBITDEPTH
       av1_build_inter_predictor(pre, pd->pre[ref].stride, dst, pd->dst.stride,
                                 &mi->bmi[i].as_mv[ref].as_mv,
-                                &xd->block_refs[ref]->sf, width, height, plane,
+                                &xd->block_refs[ref]->sf, width, height,
                                 &conv_params, mi->mbmi.interp_filter,
 #if CONFIG_GLOBAL_MOTION
                                 is_global[ref], p_col, p_row, plane, ref,

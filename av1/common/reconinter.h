@@ -27,10 +27,7 @@ extern "C" {
 static INLINE void inter_predictor(const uint8_t *src, int src_stride,
                                    uint8_t *dst, int dst_stride,
                                    const int subpel_x, const int subpel_y,
-                                   const struct scale_factors *sf, int w, int h, 
-#if CONFIG_SHORT_FILTER
-								   int plane,
-#endif
+                                   const struct scale_factors *sf, int w, int h,
                                    ConvolveParams *conv_params,
 #if CONFIG_DUAL_FILTER
                                    const InterpFilter *interp_filter,
@@ -49,7 +46,7 @@ static INLINE void inter_predictor(const uint8_t *src, int src_stride,
       av1_get_interp_filter_params(filter_y);
 #elif CONFIG_SHORT_FILTER
 	InterpFilterParams interp_filter_params =
-		av1_get_interp_filter_params_with_block_size(interp_filter, w, h, plane);
+		av1_get_interp_filter_params_with_block_size(interp_filter, w, h);
 #else
   InterpFilterParams interp_filter_params =
       av1_get_interp_filter_params(interp_filter);
@@ -88,11 +85,8 @@ static INLINE void inter_predictor(const uint8_t *src, int src_stride,
                              subpel_x, xs, subpel_y, ys, conv_params);
     else
 #endif
-      av1_convolve(src, src_stride, dst, dst_stride, w, h,
-#if CONFIG_SHORT_FILTER
-					plane,
-#endif		  
-					interp_filter, subpel_x, xs, subpel_y, ys, conv_params);
+      av1_convolve(src, src_stride, dst, dst_stride, w, h, interp_filter,
+                   subpel_x, xs, subpel_y, ys, conv_params);
   }
 }
 
@@ -262,11 +256,7 @@ void build_inter_predictors(MACROBLOCKD *xd, int plane,
 static INLINE void av1_make_inter_predictor(
     const uint8_t *src, int src_stride, uint8_t *dst, int dst_stride,
     const int subpel_x, const int subpel_y, const struct scale_factors *sf,
-    int w, int h, 
-#if CONFIG_SHORT_FILTER
-	int plane,
-#endif
-	ConvolveParams *conv_params,
+    int w, int h, ConvolveParams *conv_params,
 #if CONFIG_DUAL_FILTER
     const InterpFilter *interp_filter,
 #else
@@ -310,11 +300,7 @@ static INLINE void av1_make_inter_predictor(
   }
 #endif  // CONFIG_AOM_HIGHBITDEPTH
   inter_predictor(src, src_stride, dst, dst_stride, subpel_x, subpel_y, sf, w,
-                  h, 
-#if CONFIG_SHORT_FILTER
-				plane,
-#endif
-					conv_params, interp_filter, xs, ys);
+                  h, conv_params, interp_filter, xs, ys);
 }
 
 #if CONFIG_EXT_INTER
@@ -443,9 +429,6 @@ void av1_build_masked_inter_predictor_complex(
 void av1_build_inter_predictor(const uint8_t *src, int src_stride, uint8_t *dst,
                                int dst_stride, const MV *src_mv,
                                const struct scale_factors *sf, int w, int h,
-#if CONFIG_SHORT_FILTER && !CONFIG_GLOBAL_MOTION
-						       int plane,
-#endif
                                ConvolveParams *conv_params,
 #if CONFIG_DUAL_FILTER
                                const InterpFilter *interp_filter,

@@ -93,9 +93,6 @@ static void temporal_filter_predictors_mb_c(
   }
 #endif  // CONFIG_AOM_HIGHBITDEPTH
   av1_build_inter_predictor(y_mb_ptr, stride, &pred[0], 16, &mv, scale, 16, 16,
-#if CONFIG_SHORT_FILTER && !CONFIG_GLOBAL_MOTION
-	                        0,
-#endif
                             &conv_params, interp_filter,
 #if CONFIG_GLOBAL_MOTION
                             0, x, y, 0, 0,
@@ -104,9 +101,6 @@ static void temporal_filter_predictors_mb_c(
 
   av1_build_inter_predictor(u_mb_ptr, uv_stride, &pred[256], uv_block_width,
                             &mv, scale, uv_block_width, uv_block_height,
-#if CONFIG_SHORT_FILTER && !CONFIG_GLOBAL_MOTION
-	                        1,
-#endif
                             &conv_params, interp_filter,
 #if CONFIG_GLOBAL_MOTION
                             0, x, y, 1, 0,
@@ -115,9 +109,6 @@ static void temporal_filter_predictors_mb_c(
 
   av1_build_inter_predictor(v_mb_ptr, uv_stride, &pred[512], uv_block_width,
                             &mv, scale, uv_block_width, uv_block_height,
-#if CONFIG_SHORT_FILTER && !CONFIG_GLOBAL_MOTION
-	                        2,
-#endif
                             &conv_params, interp_filter,
 #if CONFIG_GLOBAL_MOTION
                             0, x, y, 2, 0,
