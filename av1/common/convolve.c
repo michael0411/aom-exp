@@ -700,7 +700,6 @@ static void convolve_helper(const uint8_t *src, int src_stride, uint8_t *dst,
 	  av1_get_interp_filter_params(interp_filter[1 + 2 * conv_params->ref]);
   InterpFilterParams filter_params_y =
 	  av1_get_interp_filter_params(interp_filter[0 + 2 * conv_params->ref]);
-  InterpFilterParams filter_params;
 
 #endif
 #else
@@ -835,7 +834,6 @@ static void convolve_scale_helper(const uint8_t *src, int src_stride,
       av1_get_interp_filter_params(interp_filter[1 + 2 * conv_params->ref]);
   InterpFilterParams filter_params_y =
       av1_get_interp_filter_params(interp_filter[0 + 2 * conv_params->ref]);
-  InterpFilterParams filter_params;
 #endif
 #else
   InterpFilterParams filter_params =
