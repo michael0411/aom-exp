@@ -99,31 +99,30 @@ void Encoder::Flush() {
 
 void EncoderTest::InitializeConfig() {
   const aom_codec_err_t res = codec_->DefaultEncoderConfig(&cfg_, 0);
-  dec_cfg_ = aom_codec_dec_cfg_t();
   ASSERT_EQ(AOM_CODEC_OK, res);
 }
 
 void EncoderTest::SetMode(TestMode mode) {
   switch (mode) {
-    case kRealTime: deadline_ = AOM_DL_REALTIME; break;
-
     case kOnePassGood:
     case kTwoPassGood: deadline_ = AOM_DL_GOOD_QUALITY; break;
-
+    case kRealTime:
+      deadline_ = AOM_DL_GOOD_QUALITY;
+      cfg_.g_lag_in_frames = 0;
+      break;
     default: ASSERT_TRUE(false) << "Unexpected mode " << mode;
   }
-
+  mode_ = mode;
   if (mode == kTwoPassGood)
     passes_ = 2;
   else
     passes_ = 1;
 }
 
-static bool compare_plane(const uint8_t *const buf1, const int stride1,
-                          const uint8_t *const buf2, const int stride2,
-                          const int w, const int h, int *const mismatch_row,
-                          int *const mismatch_col, int *const mismatch_pix1,
-                          int *const mismatch_pix2) {
+static bool compare_plane(const uint8_t *const buf1, int stride1,
+                          const uint8_t *const buf2, int stride2, int w, int h,
+                          int *const mismatch_row, int *const mismatch_col,
+                          int *const mismatch_pix1, int *const mismatch_pix2) {
   int r, c;
 
   for (r = 0; r < h; ++r) {
@@ -211,6 +210,7 @@ void EncoderTest::MismatchHook(const aom_image_t *img_enc,
 
 void EncoderTest::RunLoop(VideoSource *video) {
   aom_codec_dec_cfg_t dec_cfg = aom_codec_dec_cfg_t();
+  dec_cfg.allow_lowbitdepth = 1;
 
   stats_.Reset();
 
@@ -232,6 +232,11 @@ void EncoderTest::RunLoop(VideoSource *video) {
 
     ASSERT_NO_FATAL_FAILURE(video->Begin());
     encoder->InitEncoder(video);
+
+    if (mode_ == kRealTime) {
+      encoder->Control(AOME_SET_ENABLEAUTOALTREF, 0);
+    }
+
     ASSERT_FALSE(::testing::Test::HasFatalFailure());
 
     unsigned long dec_init_flags = 0;  // NOLINT
@@ -240,7 +245,7 @@ void EncoderTest::RunLoop(VideoSource *video) {
     if (init_flags_ & AOM_CODEC_USE_OUTPUT_PARTITION)
       dec_init_flags |= AOM_CODEC_USE_INPUT_FRAGMENTS;
     testing::internal::scoped_ptr<Decoder> decoder(
-        codec_->CreateDecoder(dec_cfg, dec_init_flags, 0));
+        codec_->CreateDecoder(dec_cfg, dec_init_flags));
 #if CONFIG_AV1 && CONFIG_EXT_TILE
     if (decoder->IsAV1()) {
       // Set dec_cfg.tile_row = -1 and dec_cfg.tile_col = -1 so that the whole

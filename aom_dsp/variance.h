@@ -57,15 +57,13 @@ typedef unsigned int (*aom_subp_avg_variance_fn_t)(
 #if CONFIG_AV1 && CONFIG_EXT_INTER
 typedef unsigned int (*aom_masked_sad_fn_t)(const uint8_t *src, int src_stride,
                                             const uint8_t *ref, int ref_stride,
-                                            const uint8_t *msk_ptr,
-                                            int msk_stride);
-typedef unsigned int (*aom_masked_variance_fn_t)(
-    const uint8_t *src, int src_stride, const uint8_t *ref, int ref_stride,
-    const uint8_t *msk, int msk_stride, unsigned int *sse);
+                                            const uint8_t *second_pred,
+                                            const uint8_t *msk, int msk_stride,
+                                            int invert_mask);
 typedef unsigned int (*aom_masked_subpixvariance_fn_t)(
     const uint8_t *src, int src_stride, int xoffset, int yoffset,
-    const uint8_t *ref, int ref_stride, const uint8_t *msk, int msk_stride,
-    unsigned int *sse);
+    const uint8_t *ref, int ref_stride, const uint8_t *second_pred,
+    const uint8_t *msk, int msk_stride, int invert_mask, unsigned int *sse);
 #endif  // CONFIG_AV1 && CONFIG_EXT_INTER
 
 #if CONFIG_AV1 && CONFIG_MOTION_VAR
@@ -94,7 +92,6 @@ typedef struct aom_variance_vtable {
   aom_sad_multi_d_fn_t sdx4df;
 #if CONFIG_EXT_INTER
   aom_masked_sad_fn_t msdf;
-  aom_masked_variance_fn_t mvf;
   aom_masked_subpixvariance_fn_t msvf;
 #endif  // CONFIG_EXT_INTER
 #if CONFIG_MOTION_VAR
@@ -116,6 +113,14 @@ void aom_highbd_var_filter_block2d_bil_second_pass(
     unsigned int src_pixels_per_line, unsigned int pixel_step,
     unsigned int output_height, unsigned int output_width,
     const uint8_t *filter);
+
+uint32_t aom_sse_odd_size(const uint8_t *a, int a_stride, const uint8_t *b,
+                          int b_stride, int w, int h);
+
+#if CONFIG_HIGHBITDEPTH
+uint64_t aom_highbd_sse_odd_size(const uint8_t *a, int a_stride,
+                                 const uint8_t *b, int b_stride, int w, int h);
+#endif  // CONFIG_HIGHBITDEPTH
 
 #ifdef __cplusplus
 }  // extern "C"

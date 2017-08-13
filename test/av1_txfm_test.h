@@ -76,17 +76,65 @@ typedef void (*Inv_Txfm2d_Func)(const int32_t *, uint16_t *, int, int, int);
 static const int bd = 10;
 static const int input_base = (1 << bd);
 
-#if CONFIG_AOM_HIGHBITDEPTH
-static const Fwd_Txfm2d_Func fwd_txfm_func_ls[TX_SIZES] = {
-  av1_fwd_txfm2d_4x4_c, av1_fwd_txfm2d_8x8_c, av1_fwd_txfm2d_16x16_c,
-  av1_fwd_txfm2d_32x32_c
-};
+#if CONFIG_HIGHBITDEPTH
+#if CONFIG_AV1_ENCODER
 
-static const Inv_Txfm2d_Func inv_txfm_func_ls[TX_SIZES] = {
-  av1_inv_txfm2d_add_4x4_c, av1_inv_txfm2d_add_8x8_c,
-  av1_inv_txfm2d_add_16x16_c, av1_inv_txfm2d_add_32x32_c
+static const Fwd_Txfm2d_Func fwd_txfm_func_ls[TX_SIZES_ALL] = {
+#if CONFIG_CHROMA_2X2
+  NULL,
+#endif
+  av1_fwd_txfm2d_4x4_c,
+  av1_fwd_txfm2d_8x8_c,
+  av1_fwd_txfm2d_16x16_c,
+  av1_fwd_txfm2d_32x32_c,
+#if CONFIG_TX64X64
+  av1_fwd_txfm2d_64x64_c,
+#endif
+  av1_fwd_txfm2d_4x8_c,
+  av1_fwd_txfm2d_8x4_c,
+  av1_fwd_txfm2d_8x16_c,
+  av1_fwd_txfm2d_16x8_c,
+  av1_fwd_txfm2d_16x32_c,
+  av1_fwd_txfm2d_32x16_c,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
 };
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif
 
+static const Inv_Txfm2d_Func inv_txfm_func_ls[TX_SIZES_ALL] = {
+#if CONFIG_CHROMA_2X2
+  NULL,
+#endif
+  av1_inv_txfm2d_add_4x4_c,
+  av1_inv_txfm2d_add_8x8_c,
+  av1_inv_txfm2d_add_16x16_c,
+  av1_inv_txfm2d_add_32x32_c,
+#if CONFIG_TX64X64
+  av1_inv_txfm2d_add_64x64_c,
+#endif
+  av1_inv_txfm2d_add_4x8_c,
+  av1_inv_txfm2d_add_8x4_c,
+  av1_inv_txfm2d_add_8x16_c,
+  av1_inv_txfm2d_add_16x8_c,
+  av1_inv_txfm2d_add_16x32_c,
+  av1_inv_txfm2d_add_32x16_c,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+};
+#endif  // CONFIG_HIGHBITDEPTH
+
+#define BD_NUM 3
+
+extern int bd_arr[];
+extern int8_t low_range_arr[];
+extern int8_t high_range_arr[];
+
+void txfm_stage_range_check(const int8_t *stage_range, int stage_num,
+                            const int8_t *cos_bit, int low_range,
+                            int high_range);
 }  // namespace libaom_test
 #endif  // AV1_TXFM_TEST_H_

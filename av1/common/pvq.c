@@ -187,17 +187,16 @@ void od_adapt_pvq_ctx_reset(od_pvq_adapt_ctx *state, int is_keyframe) {
   int pli;
   int bs;
   ctx = &state->pvq_codeword_ctx;
-  generic_model_init(&state->pvq_param_model[0]);
-  generic_model_init(&state->pvq_param_model[1]);
-  generic_model_init(&state->pvq_param_model[2]);
+  OD_CDFS_INIT_DYNAMIC(state->pvq_param_model[0].cdf);
+  OD_CDFS_INIT_DYNAMIC(state->pvq_param_model[1].cdf);
+  OD_CDFS_INIT_DYNAMIC(state->pvq_param_model[2].cdf);
   for (i = 0; i < 2*OD_TXSIZES; i++) {
     ctx->pvq_adapt[4*i + OD_ADAPT_K_Q8] = 384;
     ctx->pvq_adapt[4*i + OD_ADAPT_SUM_EX_Q8] = 256;
     ctx->pvq_adapt[4*i + OD_ADAPT_COUNT_Q8] = 104;
     ctx->pvq_adapt[4*i + OD_ADAPT_COUNT_EX_Q8] = 128;
   }
-  ctx->pvq_k1_increment = 128;
-  OD_CDFS_INIT(ctx->pvq_k1_cdf, ctx->pvq_k1_increment);
+  OD_CDFS_INIT_DYNAMIC(ctx->pvq_k1_cdf);
   for (pli = 0; pli < OD_NPLANES_MAX; pli++) {
     for (bs = 0; bs < OD_TXSIZES; bs++)
     for (i = 0; i < PVQ_MAX_PARTITIONS; i++) {
@@ -207,12 +206,9 @@ void od_adapt_pvq_ctx_reset(od_pvq_adapt_ctx *state, int is_keyframe) {
   for (i = 0; i < OD_TXSIZES*PVQ_MAX_PARTITIONS; i++) {
     state->pvq_ext[i] = is_keyframe ? 24576 : 2 << 16;
   }
-  state->pvq_gaintheta_increment = 128;
-  OD_CDFS_INIT(state->pvq_gaintheta_cdf, state->pvq_gaintheta_increment >> 2);
-  state->pvq_skip_dir_increment = 128;
-  OD_CDFS_INIT(state->pvq_skip_dir_cdf, state->pvq_skip_dir_increment >> 2);
-  ctx->pvq_split_increment = 128;
-  OD_CDFS_INIT(ctx->pvq_split_cdf, ctx->pvq_split_increment >> 1);
+  OD_CDFS_INIT_DYNAMIC(state->pvq_gaintheta_cdf);
+  OD_CDFS_INIT_Q15(state->pvq_skip_dir_cdf);
+  OD_CDFS_INIT_DYNAMIC(ctx->pvq_split_cdf);
 }
 
 /* QMs are arranged from smallest to largest blocksizes, first for
@@ -796,16 +792,14 @@ od_val32 od_pvq_compute_theta(int t, int max_theta) {
  *
  * @param [in]      qcg        quantized companded gain value
  * @param [in]      itheta     quantized PVQ error angle theta
- * @param [in]      theta      PVQ error angle theta
  * @param [in]      noref      indicates present or lack of reference
  *                             (prediction)
  * @param [in]      n          number of elements to be coded
  * @param [in]      beta       activity masking beta param
- * @param [in]      nodesync   do not use info that depends on the reference
  * @return                     number of pulses to use for coding
  */
-int od_pvq_compute_k(od_val32 qcg, int itheta, od_val32 theta, int noref, int n,
- od_val16 beta, int nodesync) {
+int od_pvq_compute_k(od_val32 qcg, int itheta, int noref, int n,
+    od_val16 beta) {
 #if !defined(OD_FLOAT_PVQ)
   /*Lookup table for sqrt(n+3/2) and sqrt(n+2/2) in Q10.
     Real max values are 32792 and 32784, but clamped to stay within 16 bits.
@@ -843,24 +837,17 @@ int od_pvq_compute_k(od_val32 qcg, int itheta, od_val32 theta, int noref, int n,
        approximation for the fact that the coefficients aren't identically
        distributed within a band so at low gain the number of dimensions that
        are likely to have a pulse is less than n. */
-    if (nodesync) {
 #if defined(OD_FLOAT_PVQ)
-      return OD_MAXI(1, (int)floor(.5 + (itheta - .2)*sqrt((n + 2)/2)));
+    return OD_MAXI(1, (int)floor(.5 + (itheta - .2)*sqrt((n + 2)/2)));
 #else
-      od_val16 rt;
-      OD_ASSERT(OD_ILOG(n + 1) < 13);
-      rt = od_sqrt_table[0][OD_ILOG(n + 1)];
-      /*FIXME: get rid of 64-bit mul.*/
-      return OD_MAXI(1, OD_VSHR_ROUND(((OD_SHL(itheta, OD_ITHETA_SHIFT)
-       - OD_QCONST32(.2, OD_ITHETA_SHIFT)))*(int64_t)rt,
-       OD_SQRT_TBL_SHIFT + OD_ITHETA_SHIFT));
+    od_val16 rt;
+    OD_ASSERT(OD_ILOG(n + 1) < 13);
+    rt = od_sqrt_table[0][OD_ILOG(n + 1)];
+    /*FIXME: get rid of 64-bit mul.*/
+    return OD_MAXI(1, OD_VSHR_ROUND(((OD_SHL(itheta, OD_ITHETA_SHIFT)
+     - OD_QCONST32(.2, OD_ITHETA_SHIFT)))*(int64_t)rt,
+     OD_SQRT_TBL_SHIFT + OD_ITHETA_SHIFT));
 #endif
-    }
-    else {
-      return OD_MAXI(1, (int)floor(.5 + (qcg*OD_CGAIN_SCALE_1*
-       od_pvq_sin(theta)*OD_TRIG_SCALE_1 - .2)*sqrt((n
-       + 2)/2)/(beta*OD_BETA_SCALE_1)));
-    }
   }
 }
 

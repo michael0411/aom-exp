@@ -32,6 +32,13 @@
    dot-product of the 1st band of chroma with the luma ref doesn't overflow.*/
 #define OD_CFL_FLIP_SHIFT (OD_LIMIT_BSIZE_MAX + 0)
 
+void aom_write_symbol_pvq(aom_writer *w, int symb, aom_cdf_prob *cdf,
+    int nsymbs) {
+  if (cdf[0] == 0)
+    aom_cdf_init_q15_1D(cdf, nsymbs, CDF_SIZE(nsymbs));
+  aom_write_symbol(w, symb, cdf, nsymbs);
+}
+
 static void aom_encode_pvq_codeword(aom_writer *w, od_pvq_codeword_ctx *adapt,
  const od_coeff *in, int n, int k) {
   int i;
@@ -240,23 +247,23 @@ static double od_pvq_rate(int qg, int icgr, int theta, int ts,
     aom_writer w;
     od_pvq_codeword_ctx cd;
     int tell;
-#if CONFIG_DAALA_EC
+#if !CONFIG_ANS
     od_ec_enc_init(&w.ec, 1000);
 #else
-# error "CONFIG_PVQ currently requires CONFIG_DAALA_EC."
+# error "CONFIG_PVQ currently requires !CONFIG_ANS."
 #endif
     OD_COPY(&cd, &adapt->pvq.pvq_codeword_ctx, 1);
-#if CONFIG_DAALA_EC
+#if !CONFIG_ANS
     tell = od_ec_enc_tell_frac(&w.ec);
 #else
-# error "CONFIG_PVQ currently requires CONFIG_DAALA_EC."
+# error "CONFIG_PVQ currently requires !CONFIG_ANS."
 #endif
     aom_encode_pvq_codeword(&w, &cd, y0, n - (theta != -1), k);
-#if CONFIG_DAALA_EC
+#if !CONFIG_ANS
     rate = (od_ec_enc_tell_frac(&w.ec)-tell)/8.;
     od_ec_enc_clear(&w.ec);
 #else
-# error "CONFIG_PVQ currently requires CONFIG_DAALA_EC."
+# error "CONFIG_PVQ currently requires !CONFIG_ANS."
 #endif
   }
   if (qg > 0 && theta >= 0) {
@@ -296,12 +303,10 @@ int items_compare(pvq_search_item *a, pvq_search_item *b) {
  * @param [in]     q0          quantization step size
  * @param [out]    y           pulse vector (i.e. selected PVQ codevector)
  * @param [out]    itheta      angle between input and reference (-1 if noref)
- * @param [out]    max_theta   maximum value of itheta that could have been
  * @param [out]    vk          total number of pulses
  * @param [in]     beta        per-band activity masking beta param
  * @param [out]    skip_diff   distortion cost of skipping this block
  *                             (accumulated)
- * @param [in]     nodesync    make stream robust to error in the reference
  * @param [in]     is_keyframe whether we're encoding a keyframe
  * @param [in]     pli         plane index
  * @param [in]     adapt       probability adaptation context
@@ -312,8 +317,8 @@ int items_compare(pvq_search_item *a, pvq_search_item *b) {
  * @return         gain        index of the quatized gain
 */
 static int pvq_theta(od_coeff *out, const od_coeff *x0, const od_coeff *r0,
-    int n, int q0, od_coeff *y, int *itheta, int *max_theta, int *vk,
-    od_val16 beta, double *skip_diff, int nodesync, int is_keyframe, int pli,
+    int n, int q0, od_coeff *y, int *itheta, int *vk,
+    od_val16 beta, double *skip_diff, int is_keyframe, int pli,
     const od_adapt_ctx *adapt, const int16_t *qm, const int16_t *qm_inv,
     double pvq_norm_lambda, int speed) {
   od_val32 g;
@@ -402,7 +407,6 @@ static int pvq_theta(od_coeff *out, const od_coeff *x0, const od_coeff *r0,
   noref = 1;
   best_k = 0;
   *itheta = -1;
-  *max_theta = 0;
   OD_CLEAR(y, n);
   best_qtheta = 0;
   m = 0;
@@ -428,7 +432,6 @@ static int pvq_theta(od_coeff *out, const od_coeff *x0, const od_coeff *r0,
      NULL, 0, n, speed);
     best_qtheta = 0;
     *itheta = 0;
-    *max_theta = 0;
     noref = 0;
   }
   dist0 = best_dist;
@@ -467,7 +470,7 @@ static int pvq_theta(od_coeff *out, const od_coeff *x0, const od_coeff *r0,
       for (j = theta_lower; j <= theta_upper; j++) {
         od_val32 qtheta;
         qtheta = od_pvq_compute_theta(j, ts);
-        k = od_pvq_compute_k(qcg, j, qtheta, 0, n, beta, nodesync);
+        k = od_pvq_compute_k(qcg, j, 0, n, beta);
         items[idx].gain = i;
         items[idx].theta = j;
         items[idx].k = k;
@@ -539,7 +542,6 @@ static int pvq_theta(od_coeff *out, const od_coeff *x0, const od_coeff *r0,
         best_k = k;
         best_qtheta = qtheta;
         *itheta = j;
-        *max_theta = ts;
         noref = 0;
         OD_COPY(y, y_tmp, n - 1);
       }
@@ -559,7 +561,7 @@ static int pvq_theta(od_coeff *out, const od_coeff *x0, const od_coeff *r0,
       double cost;
       od_val32 qcg;
       qcg = OD_SHL(i, OD_CGAIN_SHIFT);
-      k = od_pvq_compute_k(qcg, -1, -1, 1, n, beta, nodesync);
+      k = od_pvq_compute_k(qcg, -1, 1, n, beta);
       /* Compute the minimal possible distortion by not taking the PVQ
          cos_dist into account. */
       dist = gain_weight*(qcg - cg)*(qcg - cg);
@@ -582,7 +584,6 @@ static int pvq_theta(od_coeff *out, const od_coeff *x0, const od_coeff *r0,
         noref = 1;
         best_k = k;
         *itheta = -1;
-        *max_theta = 0;
         OD_COPY(y, y_tmp, n);
       }
     }
@@ -625,7 +626,6 @@ static int pvq_theta(od_coeff *out, const od_coeff *x0, const od_coeff *r0,
  * @param [in,out] w          multi-symbol entropy encoder
  * @param [in]     qg         quantized gain
  * @param [in]     theta      quantized post-prediction theta
- * @param [in]     max_theta  maximum possible quantized theta value
  * @param [in]     in         coefficient vector to code
  * @param [in]     n          number of coefficients in partition
  * @param [in]     k          number of pulses in partition
@@ -633,7 +633,6 @@ static int pvq_theta(od_coeff *out, const od_coeff *x0, const od_coeff *r0,
  * @param [in,out] adapt      adaptation context
  * @param [in,out] exg        ExQ16 expectation of gain value
  * @param [in,out] ext        ExQ16 expectation of theta value
- * @param [in]     nodesync   do not use info that depend on the reference
  * @param [in]     cdf_ctx    selects which cdf context to use
  * @param [in]     is_keyframe whether we're encoding a keyframe
  * @param [in]     code_skip  whether the "skip rest" flag is allowed
@@ -644,7 +643,6 @@ static int pvq_theta(od_coeff *out, const od_coeff *x0, const od_coeff *r0,
 void pvq_encode_partition(aom_writer *w,
                                  int qg,
                                  int theta,
-                                 int max_theta,
                                  const od_coeff *in,
                                  int n,
                                  int k,
@@ -652,7 +650,6 @@ void pvq_encode_partition(aom_writer *w,
                                  od_adapt_ctx *adapt,
                                  int *exg,
                                  int *ext,
-                                 int nodesync,
                                  int cdf_ctx,
                                  int is_keyframe,
                                  int code_skip,
@@ -673,8 +670,8 @@ void pvq_encode_partition(aom_writer *w,
   }
   /* Jointly code gain, theta and noref for small values. Then we handle
      larger gain and theta values. For noref, theta = -1. */
-  aom_encode_cdf_adapt(w, id, &adapt->pvq.pvq_gaintheta_cdf[cdf_ctx][0],
-   8 + 7*code_skip, adapt->pvq.pvq_gaintheta_increment);
+  aom_write_symbol_pvq(w, id, &adapt->pvq.pvq_gaintheta_cdf[cdf_ctx][0],
+   8 + 7*code_skip);
   if (encode_flip) {
     /* We could eventually do some smarter entropy coding here, but it would
        have to be good enough to overcome the overhead of the entropy coder.
@@ -685,14 +682,13 @@ void pvq_encode_partition(aom_writer *w,
   if (qg > 0) {
     int tmp;
     tmp = *exg;
-    generic_encode(w, &model[!noref], qg - 1, -1, &tmp, 2);
+    generic_encode(w, &model[!noref], qg - 1, &tmp, 2);
     OD_IIR_DIADIC(*exg, qg << 16, 2);
   }
-  if (theta > 1 && (nodesync || max_theta > 3)) {
+  if (theta > 1) {
     int tmp;
     tmp = *ext;
-    generic_encode(w, &model[2], theta - 2, nodesync ? -1 : max_theta - 3,
-     &tmp, 2);
+    generic_encode(w, &model[2], theta - 2, &tmp, 2);
     OD_IIR_DIADIC(*ext, theta << 16, 2);
   }
   aom_encode_pvq_codeword(w, &adapt->pvq.pvq_codeword_ctx, in,
@@ -729,7 +725,6 @@ int od_rdo_quant(od_coeff x, int q, double delta0, double pvq_norm_lambda) {
  * @param [in]     pli     plane index
  * @param [in]     bs      log of the block size minus two
  * @param [in]     beta    per-band activity masking beta param
- * @param [in]     nodesync  make stream robust to error in the reference
  * @param [in]     is_keyframe whether we're encoding a keyframe
  * @param [in]     qm      QM with magnitude compensation
  * @param [in]     qm_inv  Inverse of QM with magnitude compensation
@@ -748,14 +743,12 @@ PVQ_SKIP_TYPE od_pvq_encode(daala_enc_ctx *enc,
                    int pli,
                    int bs,
                    const od_val16 *beta,
-                   int nodesync,
                    int is_keyframe,
                    const int16_t *qm,
                    const int16_t *qm_inv,
                    int speed,
                    PVQ_INFO *pvq_info){
   int theta[PVQ_MAX_PARTITIONS];
-  int max_theta[PVQ_MAX_PARTITIONS];
   int qg[PVQ_MAX_PARTITIONS];
   int k[PVQ_MAX_PARTITIONS];
   od_coeff y[OD_TXSIZE_MAX*OD_TXSIZE_MAX];
@@ -790,10 +783,10 @@ PVQ_SKIP_TYPE od_pvq_encode(daala_enc_ctx *enc,
   else
     pvq_qm = 0;
 
-  exg = &enc->state.adapt.pvq.pvq_exg[pli][bs][0];
-  ext = enc->state.adapt.pvq.pvq_ext + bs*PVQ_MAX_PARTITIONS;
-  skip_cdf = enc->state.adapt.skip_cdf[2*bs + (pli != 0)];
-  model = enc->state.adapt.pvq.pvq_param_model;
+  exg = &enc->state.adapt->pvq.pvq_exg[pli][bs][0];
+  ext = enc->state.adapt->pvq.pvq_ext + bs*PVQ_MAX_PARTITIONS;
+  skip_cdf = enc->state.adapt->skip_cdf[2*bs + (pli != 0)];
+  model = enc->state.adapt->pvq.pvq_param_model;
   nb_bands = OD_BAND_OFFSETS[bs][0];
   off = &OD_BAND_OFFSETS[bs][1];
 
@@ -839,9 +832,9 @@ PVQ_SKIP_TYPE od_pvq_encode(daala_enc_ctx *enc,
       q = OD_MAXI(1, q_ac);
 
     qg[i] = pvq_theta(out + off[i], in + off[i], ref + off[i], size[i],
-     q, y + off[i], &theta[i], &max_theta[i],
-     &k[i], beta[i], &skip_diff, nodesync, is_keyframe, pli, &enc->state.adapt,
-     qm + off[i], qm_inv + off[i], enc->pvq_norm_lambda, speed);
+     q, y + off[i], &theta[i], &k[i], beta[i], &skip_diff, is_keyframe,
+     pli, enc->state.adapt, qm + off[i], qm_inv + off[i],
+     enc->pvq_norm_lambda, speed);
   }
   od_encode_checkpoint(enc, &buf);
   if (is_keyframe) out[0] = 0;
@@ -854,22 +847,22 @@ PVQ_SKIP_TYPE od_pvq_encode(daala_enc_ctx *enc,
       int tell2;
       od_rollback_buffer dc_buf;
 
-      dc_rate = -OD_LOG2((double)(skip_cdf[3] - skip_cdf[2])/
-       (double)(skip_cdf[2] - skip_cdf[1]));
+      dc_rate = -OD_LOG2((double)(OD_ICDF(skip_cdf[3]) - OD_ICDF(skip_cdf[2]))/
+       (double)(OD_ICDF(skip_cdf[2]) - OD_ICDF(skip_cdf[1])));
       dc_rate += 1;
 
-#if CONFIG_DAALA_EC
+#if !CONFIG_ANS
       tell2 = od_ec_enc_tell_frac(&enc->w.ec);
 #else
-#error "CONFIG_PVQ currently requires CONFIG_DAALA_EC."
+#error "CONFIG_PVQ currently requires !CONFIG_ANS."
 #endif
       od_encode_checkpoint(enc, &dc_buf);
-      generic_encode(&enc->w, &enc->state.adapt.model_dc[pli],
-       n - 1, -1, &enc->state.adapt.ex_dc[pli][bs][0], 2);
-#if CONFIG_DAALA_EC
+      generic_encode(&enc->w, &enc->state.adapt->model_dc[pli],
+       n - 1, &enc->state.adapt->ex_dc[pli][bs][0], 2);
+#if !CONFIG_ANS
       tell2 = od_ec_enc_tell_frac(&enc->w.ec) - tell2;
 #else
-#error "CONFIG_PVQ currently requires CONFIG_DAALA_EC."
+#error "CONFIG_PVQ currently requires !CONFIG_ANS."
 #endif
       dc_rate += tell2/8.0;
       od_encode_rollback(enc, &dc_buf);
@@ -878,14 +871,13 @@ PVQ_SKIP_TYPE od_pvq_encode(daala_enc_ctx *enc,
        enc->pvq_norm_lambda);
     }
   }
-#if CONFIG_DAALA_EC
+#if !CONFIG_ANS
   tell = od_ec_enc_tell_frac(&enc->w.ec);
 #else
-#error "CONFIG_PVQ currently requires CONFIG_DAALA_EC."
+#error "CONFIG_PVQ currently requires !CONFIG_ANS."
 #endif
   /* Code as if we're not skipping. */
-  aom_encode_cdf_adapt(&enc->w, 2 + (out[0] != 0), skip_cdf,
-   4, enc->state.adapt.skip_increment);
+  aom_write_symbol(&enc->w, 2 + (out[0] != 0), skip_cdf, 4);
   ac_dc_coded = AC_CODED + (out[0] != 0);
   cfl_encoded = 0;
   skip_rest = 1;
@@ -910,8 +902,7 @@ PVQ_SKIP_TYPE od_pvq_encode(daala_enc_ctx *enc,
 
   /* NOTE: There was no other better place to put this function. */
   if (pvq_info)
-    av1_store_pvq_enc_info(pvq_info, qg, theta, max_theta, k,
-      y, nb_bands, off, size,
+    av1_store_pvq_enc_info(pvq_info, qg, theta, k, y, nb_bands, off, size,
       skip_rest, skip_dir, bs);
 
   for (i = 0; i < nb_bands; i++) {
@@ -919,35 +910,33 @@ PVQ_SKIP_TYPE od_pvq_encode(daala_enc_ctx *enc,
     /* Encode CFL flip bit just after the first time it's used. */
     encode_flip = pli != 0 && is_keyframe && theta[i] != -1 && !cfl_encoded;
     if (i == 0 || (!skip_rest && !(skip_dir & (1 << ((i - 1)%3))))) {
-      pvq_encode_partition(&enc->w, qg[i], theta[i], max_theta[i], y + off[i],
-       size[i], k[i], model, &enc->state.adapt, exg + i, ext + i,
-       nodesync, (pli != 0)*OD_TXSIZES*PVQ_MAX_PARTITIONS
-       + bs*PVQ_MAX_PARTITIONS + i, is_keyframe, i == 0 && (i < nb_bands - 1),
-       skip_rest, encode_flip, flip);
+      pvq_encode_partition(&enc->w, qg[i], theta[i], y + off[i],
+       size[i], k[i], model, enc->state.adapt, exg + i, ext + i,
+       (pli != 0)*OD_TXSIZES*PVQ_MAX_PARTITIONS + bs*PVQ_MAX_PARTITIONS + i,
+       is_keyframe, i == 0 && (i < nb_bands - 1), skip_rest, encode_flip, flip);
     }
     if (i == 0 && !skip_rest && bs > 0) {
-      aom_encode_cdf_adapt(&enc->w, skip_dir,
-       &enc->state.adapt.pvq.pvq_skip_dir_cdf[(pli != 0) + 2*(bs - 1)][0], 7,
-       enc->state.adapt.pvq.pvq_skip_dir_increment);
+      aom_write_symbol(&enc->w, skip_dir,
+       &enc->state.adapt->pvq.pvq_skip_dir_cdf[(pli != 0) + 2*(bs - 1)][0], 7);
     }
     if (encode_flip) cfl_encoded = 1;
   }
-#if CONFIG_DAALA_EC
+#if !CONFIG_ANS
   tell = od_ec_enc_tell_frac(&enc->w.ec) - tell;
 #else
-#error "CONFIG_PVQ currently requires CONFIG_DAALA_EC."
+#error "CONFIG_PVQ currently requires !CONFIG_ANS."
 #endif
   /* Account for the rate of skipping the AC, based on the same DC decision
      we made when trying to not skip AC. */
   {
     double skip_rate;
     if (out[0] != 0) {
-      skip_rate = -OD_LOG2((skip_cdf[1] - skip_cdf[0])/
-     (double)skip_cdf[3]);
+      skip_rate = -OD_LOG2((OD_ICDF(skip_cdf[1]) - OD_ICDF(skip_cdf[0]))/
+     (double)OD_ICDF(skip_cdf[3]));
     }
     else {
-      skip_rate = -OD_LOG2(skip_cdf[0]/
-     (double)skip_cdf[3]);
+      skip_rate = -OD_LOG2(OD_ICDF(skip_cdf[0])/
+     (double)OD_ICDF(skip_cdf[3]));
     }
     tell -= (int)floor(.5+8*skip_rate);
   }
@@ -962,22 +951,22 @@ PVQ_SKIP_TYPE od_pvq_encode(daala_enc_ctx *enc,
         int tell2;
         od_rollback_buffer dc_buf;
 
-        dc_rate = -OD_LOG2((double)(skip_cdf[1] - skip_cdf[0])/
-         (double)skip_cdf[0]);
+        dc_rate = -OD_LOG2((double)(OD_ICDF(skip_cdf[1]) - OD_ICDF(skip_cdf[0]))/
+         (double)OD_ICDF(skip_cdf[0]));
         dc_rate += 1;
 
-#if CONFIG_DAALA_EC
+#if !CONFIG_ANS
         tell2 = od_ec_enc_tell_frac(&enc->w.ec);
 #else
-#error "CONFIG_PVQ currently requires CONFIG_DAALA_EC."
+#error "CONFIG_PVQ currently requires !CONFIG_ANS."
 #endif
         od_encode_checkpoint(enc, &dc_buf);
-        generic_encode(&enc->w, &enc->state.adapt.model_dc[pli],
-         n - 1, -1, &enc->state.adapt.ex_dc[pli][bs][0], 2);
-#if CONFIG_DAALA_EC
+        generic_encode(&enc->w, &enc->state.adapt->model_dc[pli],
+         n - 1, &enc->state.adapt->ex_dc[pli][bs][0], 2);
+#if !CONFIG_ANS
         tell2 = od_ec_enc_tell_frac(&enc->w.ec) - tell2;
 #else
-#error "CONFIG_PVQ currently requires CONFIG_DAALA_EC."
+#error "CONFIG_PVQ currently requires !CONFIG_ANS."
 #endif
         dc_rate += tell2/8.0;
         od_encode_rollback(enc, &dc_buf);
@@ -988,8 +977,7 @@ PVQ_SKIP_TYPE od_pvq_encode(daala_enc_ctx *enc,
     }
     /* We decide to skip, roll back everything as it was before. */
     od_encode_rollback(enc, &buf);
-    aom_encode_cdf_adapt(&enc->w, out[0] != 0, skip_cdf,
-     4, enc->state.adapt.skip_increment);
+    aom_write_symbol(&enc->w, out[0] != 0, skip_cdf, 4);
     ac_dc_coded = (out[0] != 0);
     if (is_keyframe) for (i = 1; i < 1 << (2*bs + 4); i++) out[i] = 0;
     else for (i = 1; i < 1 << (2*bs + 4); i++) out[i] = ref[i];

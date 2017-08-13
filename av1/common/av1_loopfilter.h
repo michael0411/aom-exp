@@ -37,6 +37,10 @@ enum lf_path {
 
 struct loopfilter {
   int filter_level;
+#if CONFIG_UV_LVL
+  int filter_level_u;
+  int filter_level_v;
+#endif
 
   int sharpness_level;
   int last_sharpness_level;
@@ -45,7 +49,8 @@ struct loopfilter {
   uint8_t mode_ref_delta_update;
 
   // 0 = Intra, Last, Last2+Last3(CONFIG_EXT_REFS),
-  // GF, BRF(CONFIG_EXT_REFS), ARF
+  // GF, BRF(CONFIG_EXT_REFS),
+  // ARF2(CONFIG_EXT_REFS+CONFIG_ALTREF2), ARF
   signed char ref_deltas[TOTAL_REFS_PER_FRAME];
   signed char last_ref_deltas[TOTAL_REFS_PER_FRAME];
 
@@ -112,14 +117,14 @@ void av1_filter_block_plane_ss11_hor(struct AV1Common *const cm,
                                      struct macroblockd_plane *const plane,
                                      int mi_row, LOOP_FILTER_MASK *lfm);
 
-void av1_filter_block_plane_non420_ver(struct AV1Common *cm,
+void av1_filter_block_plane_non420_ver(struct AV1Common *const cm,
                                        struct macroblockd_plane *plane,
                                        MODE_INFO **mi_8x8, int mi_row,
-                                       int mi_col);
-void av1_filter_block_plane_non420_hor(struct AV1Common *cm,
+                                       int mi_col, int pl);
+void av1_filter_block_plane_non420_hor(struct AV1Common *const cm,
                                        struct macroblockd_plane *plane,
                                        MODE_INFO **mi_8x8, int mi_row,
-                                       int mi_col);
+                                       int mi_col, int pl);
 
 void av1_loop_filter_init(struct AV1Common *cm);
 

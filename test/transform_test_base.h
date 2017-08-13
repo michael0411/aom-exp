@@ -15,6 +15,7 @@
 #include "./aom_config.h"
 #include "aom_mem/aom_mem.h"
 #include "aom/aom_codec.h"
+#include "aom_dsp/txfm_common.h"
 
 namespace libaom_test {
 
@@ -28,10 +29,10 @@ namespace libaom_test {
 const int kDctMaxValue = 16384;
 
 typedef void (*FhtFunc)(const int16_t *in, tran_low_t *out, int stride,
-                        int tx_type);
+                        TxfmParam *txfm_param);
 
 typedef void (*IhtFunc)(const tran_low_t *in, uint8_t *out, int stride,
-                        int tx_type);
+                        const TxfmParam *txfm_param);
 
 class TransformTestBase {
  public:
@@ -56,7 +57,7 @@ class TransformTestBase {
         aom_memalign(16, sizeof(uint8_t) * num_coeffs_));
     uint8_t *src = reinterpret_cast<uint8_t *>(
         aom_memalign(16, sizeof(uint8_t) * num_coeffs_));
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
     uint16_t *dst16 = reinterpret_cast<uint16_t *>(
         aom_memalign(16, sizeof(uint16_t) * num_coeffs_));
     uint16_t *src16 = reinterpret_cast<uint16_t *>(
@@ -70,7 +71,7 @@ class TransformTestBase {
           src[j] = rnd.Rand8();
           dst[j] = rnd.Rand8();
           test_input_block[j] = src[j] - dst[j];
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
         } else {
           src16[j] = rnd.Rand16() & mask_;
           dst16[j] = rnd.Rand16() & mask_;
@@ -83,7 +84,7 @@ class TransformTestBase {
           RunFwdTxfm(test_input_block, test_temp_block, pitch_));
       if (bit_depth_ == AOM_BITS_8) {
         ASM_REGISTER_STATE_CHECK(RunInvTxfm(test_temp_block, dst, pitch_));
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
       } else {
         ASM_REGISTER_STATE_CHECK(
             RunInvTxfm(test_temp_block, CONVERT_TO_BYTEPTR(dst16), pitch_));
@@ -91,7 +92,7 @@ class TransformTestBase {
       }
 
       for (int j = 0; j < num_coeffs_; ++j) {
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
         const int diff =
             bit_depth_ == AOM_BITS_8 ? dst[j] - src[j] : dst16[j] - src16[j];
 #else
@@ -118,7 +119,7 @@ class TransformTestBase {
     aom_free(test_temp_block);
     aom_free(dst);
     aom_free(src);
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
     aom_free(dst16);
     aom_free(src16);
 #endif
@@ -148,7 +149,7 @@ class TransformTestBase {
           input_block[in_idx] = (rnd.Rand16() & mask_) - (rnd.Rand16() & mask_);
           if (bit_depth_ == AOM_BITS_8) {
             output_block[out_idx] = output_ref_block[out_idx] = rnd.Rand8();
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
           } else {
             output_block[out_idx] = output_ref_block[out_idx] =
                 rnd.Rand16() & mask_;
@@ -157,7 +158,7 @@ class TransformTestBase {
         }
       }
 
-      fwd_txfm_ref(input_block, output_ref_block, stride, tx_type_);
+      fwd_txfm_ref(input_block, output_ref_block, stride, &txfm_param_);
       ASM_REGISTER_STATE_CHECK(RunFwdTxfm(input_block, output_block, stride));
 
       // The minimum quant value is 4.
@@ -205,9 +206,9 @@ class TransformTestBase {
         }
       }
 
-      fwd_txfm_ref(input_block, trans_block, pitch_, tx_type_);
+      fwd_txfm_ref(input_block, trans_block, pitch_, &txfm_param_);
 
-      inv_txfm_ref(trans_block, output_ref_block, stride, tx_type_);
+      inv_txfm_ref(trans_block, output_ref_block, stride, &txfm_param_);
       ASM_REGISTER_STATE_CHECK(RunInvTxfm(trans_block, output_block, stride));
 
       for (j = 0; j < height_; ++j) {
@@ -247,7 +248,7 @@ class TransformTestBase {
         for (int j = 0; j < num_coeffs_; ++j) input_extreme_block[j] = -mask_;
       }
 
-      fwd_txfm_ref(input_extreme_block, output_ref_block, pitch_, tx_type_);
+      fwd_txfm_ref(input_extreme_block, output_ref_block, pitch_, &txfm_param_);
       ASM_REGISTER_STATE_CHECK(
           RunFwdTxfm(input_extreme_block, output_block, pitch_));
 
@@ -280,7 +281,7 @@ class TransformTestBase {
     uint8_t *src = reinterpret_cast<uint8_t *>(
         aom_memalign(16, sizeof(uint8_t) * num_coeffs_));
 
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
     uint16_t *dst16 = reinterpret_cast<uint16_t *>(
         aom_memalign(16, sizeof(uint16_t) * num_coeffs_));
     uint16_t *src16 = reinterpret_cast<uint16_t *>(
@@ -294,7 +295,7 @@ class TransformTestBase {
           src[j] = rnd.Rand8();
           dst[j] = rnd.Rand8();
           in[j] = src[j] - dst[j];
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
         } else {
           src16[j] = rnd.Rand16() & mask_;
           dst16[j] = rnd.Rand16() & mask_;
@@ -303,11 +304,11 @@ class TransformTestBase {
         }
       }
 
-      fwd_txfm_ref(in, coeff, pitch_, tx_type_);
+      fwd_txfm_ref(in, coeff, pitch_, &txfm_param_);
 
       if (bit_depth_ == AOM_BITS_8) {
         ASM_REGISTER_STATE_CHECK(RunInvTxfm(coeff, dst, pitch_));
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
       } else {
         ASM_REGISTER_STATE_CHECK(
             RunInvTxfm(coeff, CONVERT_TO_BYTEPTR(dst16), pitch_));
@@ -315,7 +316,7 @@ class TransformTestBase {
       }
 
       for (int j = 0; j < num_coeffs_; ++j) {
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
         const int diff =
             bit_depth_ == AOM_BITS_8 ? dst[j] - src[j] : dst16[j] - src16[j];
 #else
@@ -330,7 +331,7 @@ class TransformTestBase {
     aom_free(coeff);
     aom_free(dst);
     aom_free(src);
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
     aom_free(src16);
     aom_free(dst16);
 #endif
@@ -338,12 +339,12 @@ class TransformTestBase {
 
   int pitch_;
   int height_;
-  int tx_type_;
   FhtFunc fwd_txfm_ref;
   IhtFunc inv_txfm_ref;
   aom_bit_depth_t bit_depth_;
   int mask_;
   int num_coeffs_;
+  TxfmParam txfm_param_;
 
  private:
   //  Assume transform size is 4x4, 8x8, 16x16,...

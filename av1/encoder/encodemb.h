@@ -39,17 +39,12 @@ typedef enum AV1_XFORM_QUANT {
   AV1_XFORM_QUANT_FP = 0,
   AV1_XFORM_QUANT_B = 1,
   AV1_XFORM_QUANT_DC = 2,
-#if CONFIG_NEW_QUANT
-  AV1_XFORM_QUANT_FP_NUQ = 3,
-  AV1_XFORM_QUANT_B_NUQ = 4,
-  AV1_XFORM_QUANT_DC_NUQ = 5,
-#endif  // CONFIG_NEW_QUANT
   AV1_XFORM_QUANT_SKIP_QUANT,
   AV1_XFORM_QUANT_TYPES,
 } AV1_XFORM_QUANT;
 
-void av1_encode_sb(AV1_COMMON *cm, MACROBLOCK *x, BLOCK_SIZE bsize,
-                   const int mi_row, const int mi_col);
+void av1_encode_sb(AV1_COMMON *cm, MACROBLOCK *x, BLOCK_SIZE bsize, int mi_row,
+                   int mi_col);
 #if CONFIG_SUPERTX
 void av1_encode_sb_supertx(AV1_COMMON *cm, MACROBLOCK *x, BLOCK_SIZE bsize);
 #endif  // CONFIG_SUPERTX
@@ -58,8 +53,13 @@ void av1_xform_quant(const AV1_COMMON *cm, MACROBLOCK *x, int plane, int block,
                      int blk_row, int blk_col, BLOCK_SIZE plane_bsize,
                      TX_SIZE tx_size, int ctx, AV1_XFORM_QUANT xform_quant_idx);
 
-int av1_optimize_b(const AV1_COMMON *cm, MACROBLOCK *mb, int plane, int block,
-                   TX_SIZE tx_size, int ctx);
+int av1_optimize_b(const AV1_COMMON *cm, MACROBLOCK *mb, int plane, int blk_row,
+                   int blk_col, int block, BLOCK_SIZE plane_bsize,
+                   TX_SIZE tx_size, const ENTROPY_CONTEXT *a,
+                   const ENTROPY_CONTEXT *l);
+
+void av1_subtract_txb(MACROBLOCK *x, int plane, BLOCK_SIZE plane_bsize,
+                      int blk_col, int blk_row, TX_SIZE tx_size);
 
 void av1_subtract_plane(MACROBLOCK *x, BLOCK_SIZE bsize, int plane);
 
@@ -71,8 +71,8 @@ void av1_encode_block_intra(int plane, int block, int blk_row, int blk_col,
 
 void av1_encode_intra_block_plane(AV1_COMMON *cm, MACROBLOCK *x,
                                   BLOCK_SIZE bsize, int plane,
-                                  int enable_optimize_b, const int mi_row,
-                                  const int mi_col);
+                                  int enable_optimize_b, int mi_row,
+                                  int mi_col);
 
 #if CONFIG_PVQ
 PVQ_SKIP_TYPE av1_pvq_encode_helper(MACROBLOCK *x, tran_low_t *const coeff,
@@ -82,11 +82,19 @@ PVQ_SKIP_TYPE av1_pvq_encode_helper(MACROBLOCK *x, tran_low_t *const coeff,
                                     int tx_size, TX_TYPE tx_type, int *rate,
                                     int speed, PVQ_INFO *pvq_info);
 
-void av1_store_pvq_enc_info(PVQ_INFO *pvq_info, int *qg, int *theta,
-                            int *max_theta, int *k, od_coeff *y, int nb_bands,
-                            const int *off, int *size, int skip_rest,
-                            int skip_dir, int bs);
+void av1_store_pvq_enc_info(PVQ_INFO *pvq_info, int *qg, int *theta, int *k,
+                            od_coeff *y, int nb_bands, const int *off,
+                            int *size, int skip_rest, int skip_dir, int bs);
 #endif
+
+#if CONFIG_DPCM_INTRA
+void av1_encode_block_intra_dpcm(const AV1_COMMON *cm, MACROBLOCK *x,
+                                 PREDICTION_MODE mode, int plane, int block,
+                                 int blk_row, int blk_col,
+                                 BLOCK_SIZE plane_bsize, TX_SIZE tx_size,
+                                 TX_TYPE tx_type, ENTROPY_CONTEXT *ta,
+                                 ENTROPY_CONTEXT *tl, int8_t *skip);
+#endif  // CONFIG_DPCM_INTRA
 
 #ifdef __cplusplus
 }  // extern "C"

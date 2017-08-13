@@ -20,8 +20,10 @@
 #include "av1/common/onyxc_int.h"
 
 void av1_set_mb_mi(AV1_COMMON *cm, int width, int height) {
-  const int aligned_width = ALIGN_POWER_OF_TWO(width, MI_SIZE_LOG2);
-  const int aligned_height = ALIGN_POWER_OF_TWO(height, MI_SIZE_LOG2);
+  // TODO(jingning): Fine tune the loop filter operations and bring this
+  // back to integer multiple of 4 for cb4x4.
+  const int aligned_width = ALIGN_POWER_OF_TWO(width, 3);
+  const int aligned_height = ALIGN_POWER_OF_TWO(height, 3);
 
   cm->mi_cols = aligned_width >> MI_SIZE_LOG2;
   cm->mi_rows = aligned_height >> MI_SIZE_LOG2;
@@ -84,6 +86,9 @@ void av1_free_ref_frame_buffers(BufferPool *pool) {
     aom_free(pool->frame_bufs[i].mvs);
     pool->frame_bufs[i].mvs = NULL;
     aom_free_frame_buffer(&pool->frame_bufs[i].buf);
+#if CONFIG_HASH_ME
+    av1_hash_table_destroy(&pool->frame_bufs[i].hash_table);
+#endif
   }
 }
 
@@ -91,11 +96,18 @@ void av1_free_ref_frame_buffers(BufferPool *pool) {
 // Assumes cm->rst_info[p].restoration_tilesize is already initialized
 void av1_alloc_restoration_buffers(AV1_COMMON *cm) {
   int p;
-  av1_alloc_restoration_struct(cm, &cm->rst_info[0], cm->width, cm->height);
+#if CONFIG_FRAME_SUPERRES
+  int width = cm->superres_upscaled_width;
+  int height = cm->superres_upscaled_height;
+#else
+  int width = cm->width;
+  int height = cm->height;
+#endif  // CONFIG_FRAME_SUPERRES
+  av1_alloc_restoration_struct(cm, &cm->rst_info[0], width, height);
   for (p = 1; p < MAX_MB_PLANE; ++p)
-    av1_alloc_restoration_struct(
-        cm, &cm->rst_info[p], ROUND_POWER_OF_TWO(cm->width, cm->subsampling_x),
-        ROUND_POWER_OF_TWO(cm->height, cm->subsampling_y));
+    av1_alloc_restoration_struct(cm, &cm->rst_info[p],
+                                 ROUND_POWER_OF_TWO(width, cm->subsampling_x),
+                                 ROUND_POWER_OF_TWO(height, cm->subsampling_y));
   aom_free(cm->rst_internal.tmpbuf);
   CHECK_MEM_ERROR(cm, cm->rst_internal.tmpbuf,
                   (int32_t *)aom_memalign(16, RESTORATION_TMPBUF_SIZE));
@@ -123,6 +135,11 @@ void av1_free_context_buffers(AV1_COMMON *cm) {
 #if CONFIG_VAR_TX
   aom_free(cm->above_txfm_context);
   cm->above_txfm_context = NULL;
+
+  for (i = 0; i < MAX_MB_PLANE; ++i) {
+    aom_free(cm->top_txfm_context[i]);
+    cm->top_txfm_context[i] = NULL;
+  }
 #endif
 }
 
@@ -153,7 +170,8 @@ int av1_alloc_context_buffers(AV1_COMMON *cm, int width, int height) {
     for (i = 0; i < MAX_MB_PLANE; i++) {
       aom_free(cm->above_context[i]);
       cm->above_context[i] = (ENTROPY_CONTEXT *)aom_calloc(
-          2 * aligned_mi_cols, sizeof(*cm->above_context[0]));
+          aligned_mi_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0]),
+          sizeof(*cm->above_context[0]));
       if (!cm->above_context[i]) goto fail;
     }
 
@@ -165,8 +183,16 @@ int av1_alloc_context_buffers(AV1_COMMON *cm, int width, int height) {
 #if CONFIG_VAR_TX
     aom_free(cm->above_txfm_context);
     cm->above_txfm_context = (TXFM_CONTEXT *)aom_calloc(
-        aligned_mi_cols, sizeof(*cm->above_txfm_context));
+        aligned_mi_cols << TX_UNIT_WIDE_LOG2, sizeof(*cm->above_txfm_context));
     if (!cm->above_txfm_context) goto fail;
+
+    for (i = 0; i < MAX_MB_PLANE; ++i) {
+      aom_free(cm->top_txfm_context[i]);
+      cm->top_txfm_context[i] =
+          (TXFM_CONTEXT *)aom_calloc(aligned_mi_cols << TX_UNIT_WIDE_LOG2,
+                                     sizeof(*cm->top_txfm_context[0]));
+      if (!cm->top_txfm_context[i]) goto fail;
+    }
 #endif
 
     cm->above_context_alloc_cols = aligned_mi_cols;

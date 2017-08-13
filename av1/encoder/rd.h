@@ -30,12 +30,13 @@ extern "C" {
 #define RDDIV_BITS 7
 #define RD_EPB_SHIFT 6
 
-#define RDCOST(RM, DM, R, D) \
-  (ROUND_POWER_OF_TWO(((int64_t)R) * (RM), AV1_PROB_COST_SHIFT) + (D << DM))
+#define RDCOST(RM, R, D)                                          \
+  (ROUND_POWER_OF_TWO(((int64_t)R) * (RM), AV1_PROB_COST_SHIFT) + \
+   (D << RDDIV_BITS))
 
-#define RDCOST_DBL(RM, DM, R, D)                                   \
+#define RDCOST_DBL(RM, R, D)                                       \
   (((((double)(R)) * (RM)) / (double)(1 << AV1_PROB_COST_SHIFT)) + \
-   ((double)(D) * (1 << (DM))))
+   ((double)(D) * (1 << RDDIV_BITS)))
 
 #define QIDX_SKIP_THRESH 115
 
@@ -43,12 +44,6 @@ extern "C" {
 #define MV_COST_WEIGHT_SUB 120
 
 #define INVALID_MV 0x80008000
-
-#if CONFIG_EXT_REFS
-#define MAX_REFS 15
-#else
-#define MAX_REFS 6
-#endif  // CONFIG_EXT_REFS
 
 #define RD_THRESH_MAX_FACT 64
 #define RD_THRESH_INC 1
@@ -61,6 +56,9 @@ typedef enum {
   THR_NEARESTL2,
   THR_NEARESTL3,
   THR_NEARESTB,
+#if CONFIG_ALTREF2
+  THR_NEARESTA2,
+#endif  // CONFIG_ALTREF2
 #endif  // CONFIG_EXT_REFS
   THR_NEARESTA,
   THR_NEARESTG,
@@ -72,6 +70,9 @@ typedef enum {
   THR_NEWL2,
   THR_NEWL3,
   THR_NEWB,
+#if CONFIG_ALTREF2
+  THR_NEWA2,
+#endif  // CONFIG_ALTREF2
 #endif  // CONFIG_EXT_REFS
   THR_NEWA,
   THR_NEWG,
@@ -81,31 +82,74 @@ typedef enum {
   THR_NEARL2,
   THR_NEARL3,
   THR_NEARB,
+#if CONFIG_ALTREF2
+  THR_NEARA2,
+#endif  // CONFIG_ALTREF2
 #endif  // CONFIG_EXT_REFS
   THR_NEARA,
   THR_NEARG,
-
-#if CONFIG_EXT_INTER
-  THR_NEWFROMNEARMV,
-#if CONFIG_EXT_REFS
-  THR_NEWFROMNEARL2,
-  THR_NEWFROMNEARL3,
-  THR_NEWFROMNEARB,
-#endif  // CONFIG_EXT_REFS
-  THR_NEWFROMNEARA,
-  THR_NEWFROMNEARG,
-#endif  // CONFIG_EXT_INTER
 
   THR_ZEROMV,
 #if CONFIG_EXT_REFS
   THR_ZEROL2,
   THR_ZEROL3,
   THR_ZEROB,
+#if CONFIG_ALTREF2
+  THR_ZEROA2,
+#endif  // CONFIG_ALTREF2
 #endif  // CONFIG_EXT_REFS
-  THR_ZEROG,
   THR_ZEROA,
+  THR_ZEROG,
 
 #if CONFIG_EXT_INTER
+
+#if CONFIG_COMPOUND_SINGLEREF
+  THR_SR_NEAREST_NEARMV,
+#if CONFIG_EXT_REFS
+  THR_SR_NEAREST_NEARL2,
+  THR_SR_NEAREST_NEARL3,
+  THR_SR_NEAREST_NEARB,
+#endif  // CONFIG_EXT_REFS
+  THR_SR_NEAREST_NEARG,
+  THR_SR_NEAREST_NEARA,
+
+  /*
+  THR_SR_NEAREST_NEWMV,
+#if CONFIG_EXT_REFS
+  THR_SR_NEAREST_NEWL2,
+  THR_SR_NEAREST_NEWL3,
+  THR_SR_NEAREST_NEWB,
+#endif  // CONFIG_EXT_REFS
+  THR_SR_NEAREST_NEWG,
+  THR_SR_NEAREST_NEWA,*/
+
+  THR_SR_NEAR_NEWMV,
+#if CONFIG_EXT_REFS
+  THR_SR_NEAR_NEWL2,
+  THR_SR_NEAR_NEWL3,
+  THR_SR_NEAR_NEWB,
+#endif  // CONFIG_EXT_REFS
+  THR_SR_NEAR_NEWG,
+  THR_SR_NEAR_NEWA,
+
+  THR_SR_ZERO_NEWMV,
+#if CONFIG_EXT_REFS
+  THR_SR_ZERO_NEWL2,
+  THR_SR_ZERO_NEWL3,
+  THR_SR_ZERO_NEWB,
+#endif  // CONFIG_EXT_REFS
+  THR_SR_ZERO_NEWG,
+  THR_SR_ZERO_NEWA,
+
+  THR_SR_NEW_NEWMV,
+#if CONFIG_EXT_REFS
+  THR_SR_NEW_NEWL2,
+  THR_SR_NEW_NEWL3,
+  THR_SR_NEW_NEWB,
+#endif  // CONFIG_EXT_REFS
+  THR_SR_NEW_NEWG,
+  THR_SR_NEW_NEWA,
+#endif  // CONFIG_COMPOUND_SINGLEREF
 
   THR_COMP_NEAREST_NEARESTLA,
 #if CONFIG_EXT_REFS
@@ -118,6 +162,18 @@ typedef enum {
   THR_COMP_NEAREST_NEARESTL2B,
   THR_COMP_NEAREST_NEARESTL3B,
   THR_COMP_NEAREST_NEARESTGB,
+#if CONFIG_ALTREF2
+  THR_COMP_NEAREST_NEARESTLA2,
+  THR_COMP_NEAREST_NEARESTL2A2,
+  THR_COMP_NEAREST_NEARESTL3A2,
+  THR_COMP_NEAREST_NEARESTGA2,
+#endif  // CONFIG_ALTREF2
+#if CONFIG_EXT_COMP_REFS
+  THR_COMP_NEAREST_NEARESTLL2,
+  THR_COMP_NEAREST_NEARESTLL3,
+  THR_COMP_NEAREST_NEARESTLG,
+  THR_COMP_NEAREST_NEARESTBA,
+#endif  // CONFIG_EXT_COMP_REFS
 #endif  // CONFIG_EXT_REFS
 
 #else  // CONFIG_EXT_INTER
@@ -133,6 +189,18 @@ typedef enum {
   THR_COMP_NEARESTL2B,
   THR_COMP_NEARESTL3B,
   THR_COMP_NEARESTGB,
+#if CONFIG_ALTREF2
+  THR_COMP_NEARESTLA2,
+  THR_COMP_NEARESTL2A2,
+  THR_COMP_NEARESTL3A2,
+  THR_COMP_NEARESTGA2,
+#endif  // CONFIG_ALTREF2
+#if CONFIG_EXT_COMP_REFS
+  THR_COMP_NEARESTLL2,
+  THR_COMP_NEARESTLL3,
+  THR_COMP_NEARESTLG,
+  THR_COMP_NEARESTBA,
+#endif  // CONFIG_EXT_COMP_REFS
 #endif  // CONFIG_EXT_REFS
 
 #endif  // CONFIG_EXT_INTER
@@ -141,12 +209,14 @@ typedef enum {
 
 #if CONFIG_ALT_INTRA
   THR_SMOOTH,
+#if CONFIG_SMOOTH_HV
+  THR_SMOOTH_V,
+  THR_SMOOTH_H,
+#endif  // CONFIG_SMOOTH_HV
 #endif  // CONFIG_ALT_INTRA
 
 #if CONFIG_EXT_INTER
 
-  THR_COMP_NEAR_NEARESTLA,
-  THR_COMP_NEAREST_NEARLA,
   THR_COMP_NEAR_NEARLA,
   THR_COMP_NEW_NEARESTLA,
   THR_COMP_NEAREST_NEWLA,
@@ -156,8 +226,6 @@ typedef enum {
   THR_COMP_ZERO_ZEROLA,
 
 #if CONFIG_EXT_REFS
-  THR_COMP_NEAR_NEARESTL2A,
-  THR_COMP_NEAREST_NEARL2A,
   THR_COMP_NEAR_NEARL2A,
   THR_COMP_NEW_NEARESTL2A,
   THR_COMP_NEAREST_NEWL2A,
@@ -166,8 +234,6 @@ typedef enum {
   THR_COMP_NEW_NEWL2A,
   THR_COMP_ZERO_ZEROL2A,
 
-  THR_COMP_NEAR_NEARESTL3A,
-  THR_COMP_NEAREST_NEARL3A,
   THR_COMP_NEAR_NEARL3A,
   THR_COMP_NEW_NEARESTL3A,
   THR_COMP_NEAREST_NEWL3A,
@@ -177,8 +243,6 @@ typedef enum {
   THR_COMP_ZERO_ZEROL3A,
 #endif  // CONFIG_EXT_REFS
 
-  THR_COMP_NEAR_NEARESTGA,
-  THR_COMP_NEAREST_NEARGA,
   THR_COMP_NEAR_NEARGA,
   THR_COMP_NEW_NEARESTGA,
   THR_COMP_NEAREST_NEWGA,
@@ -188,8 +252,6 @@ typedef enum {
   THR_COMP_ZERO_ZEROGA,
 
 #if CONFIG_EXT_REFS
-  THR_COMP_NEAR_NEARESTLB,
-  THR_COMP_NEAREST_NEARLB,
   THR_COMP_NEAR_NEARLB,
   THR_COMP_NEW_NEARESTLB,
   THR_COMP_NEAREST_NEWLB,
@@ -198,8 +260,6 @@ typedef enum {
   THR_COMP_NEW_NEWLB,
   THR_COMP_ZERO_ZEROLB,
 
-  THR_COMP_NEAR_NEARESTL2B,
-  THR_COMP_NEAREST_NEARL2B,
   THR_COMP_NEAR_NEARL2B,
   THR_COMP_NEW_NEARESTL2B,
   THR_COMP_NEAREST_NEWL2B,
@@ -208,8 +268,6 @@ typedef enum {
   THR_COMP_NEW_NEWL2B,
   THR_COMP_ZERO_ZEROL2B,
 
-  THR_COMP_NEAR_NEARESTL3B,
-  THR_COMP_NEAREST_NEARL3B,
   THR_COMP_NEAR_NEARL3B,
   THR_COMP_NEW_NEARESTL3B,
   THR_COMP_NEAREST_NEWL3B,
@@ -218,8 +276,6 @@ typedef enum {
   THR_COMP_NEW_NEWL3B,
   THR_COMP_ZERO_ZEROL3B,
 
-  THR_COMP_NEAR_NEARESTGB,
-  THR_COMP_NEAREST_NEARGB,
   THR_COMP_NEAR_NEARGB,
   THR_COMP_NEW_NEARESTGB,
   THR_COMP_NEAREST_NEWGB,
@@ -227,6 +283,74 @@ typedef enum {
   THR_COMP_NEAR_NEWGB,
   THR_COMP_NEW_NEWGB,
   THR_COMP_ZERO_ZEROGB,
+
+#if CONFIG_ALTREF2
+  THR_COMP_NEAR_NEARLA2,
+  THR_COMP_NEW_NEARESTLA2,
+  THR_COMP_NEAREST_NEWLA2,
+  THR_COMP_NEW_NEARLA2,
+  THR_COMP_NEAR_NEWLA2,
+  THR_COMP_NEW_NEWLA2,
+  THR_COMP_ZERO_ZEROLA2,
+
+  THR_COMP_NEAR_NEARL2A2,
+  THR_COMP_NEW_NEARESTL2A2,
+  THR_COMP_NEAREST_NEWL2A2,
+  THR_COMP_NEW_NEARL2A2,
+  THR_COMP_NEAR_NEWL2A2,
+  THR_COMP_NEW_NEWL2A2,
+  THR_COMP_ZERO_ZEROL2A2,
+
+  THR_COMP_NEAR_NEARL3A2,
+  THR_COMP_NEW_NEARESTL3A2,
+  THR_COMP_NEAREST_NEWL3A2,
+  THR_COMP_NEW_NEARL3A2,
+  THR_COMP_NEAR_NEWL3A2,
+  THR_COMP_NEW_NEWL3A2,
+  THR_COMP_ZERO_ZEROL3A2,
+
+  THR_COMP_NEAR_NEARGA2,
+  THR_COMP_NEW_NEARESTGA2,
+  THR_COMP_NEAREST_NEWGA2,
+  THR_COMP_NEW_NEARGA2,
+  THR_COMP_NEAR_NEWGA2,
+  THR_COMP_NEW_NEWGA2,
+  THR_COMP_ZERO_ZEROGA2,
+#endif  // CONFIG_ALTREF2
+
+#if CONFIG_EXT_COMP_REFS
+  THR_COMP_NEAR_NEARLL2,
+  THR_COMP_NEW_NEARESTLL2,
+  THR_COMP_NEAREST_NEWLL2,
+  THR_COMP_NEW_NEARLL2,
+  THR_COMP_NEAR_NEWLL2,
+  THR_COMP_NEW_NEWLL2,
+  THR_COMP_ZERO_ZEROLL2,
+
+  THR_COMP_NEAR_NEARLL3,
+  THR_COMP_NEW_NEARESTLL3,
+  THR_COMP_NEAREST_NEWLL3,
+  THR_COMP_NEW_NEARLL3,
+  THR_COMP_NEAR_NEWLL3,
+  THR_COMP_NEW_NEWLL3,
+  THR_COMP_ZERO_ZEROLL3,
+
+  THR_COMP_NEAR_NEARLG,
+  THR_COMP_NEW_NEARESTLG,
+  THR_COMP_NEAREST_NEWLG,
+  THR_COMP_NEW_NEARLG,
+  THR_COMP_NEAR_NEWLG,
+  THR_COMP_NEW_NEWLG,
+  THR_COMP_ZERO_ZEROLG,
+
+  THR_COMP_NEAR_NEARBA,
+  THR_COMP_NEW_NEARESTBA,
+  THR_COMP_NEAREST_NEWBA,
+  THR_COMP_NEW_NEARBA,
+  THR_COMP_NEAR_NEWBA,
+  THR_COMP_NEW_NEWBA,
+  THR_COMP_ZERO_ZEROBA,
+#endif  // CONFIG_EXT_COMP_REFS
 #endif  // CONFIG_EXT_REFS
 
 #else  // CONFIG_EXT_INTER
@@ -251,6 +375,28 @@ typedef enum {
   THR_COMP_NEWL3B,
   THR_COMP_NEARGB,
   THR_COMP_NEWGB,
+
+#if CONFIG_ALTREF2
+  THR_COMP_NEARLA2,
+  THR_COMP_NEWLA2,
+  THR_COMP_NEARL2A2,
+  THR_COMP_NEWL2A2,
+  THR_COMP_NEARL3A2,
+  THR_COMP_NEWL3A2,
+  THR_COMP_NEARGA2,
+  THR_COMP_NEWGA2,
+#endif  // CONFIG_ALTREF2
+
+#if CONFIG_EXT_COMP_REFS
+  THR_COMP_NEARLL2,
+  THR_COMP_NEWLL2,
+  THR_COMP_NEARLL3,
+  THR_COMP_NEWLL3,
+  THR_COMP_NEARLG,
+  THR_COMP_NEWLG,
+  THR_COMP_NEARBA,
+  THR_COMP_NEWBA,
+#endif  // CONFIG_EXT_COMP_REFS
 #endif  // CONFIG_EXT_REFS
 
   THR_COMP_ZEROLA,
@@ -265,6 +411,20 @@ typedef enum {
   THR_COMP_ZEROL2B,
   THR_COMP_ZEROL3B,
   THR_COMP_ZEROGB,
+
+#if CONFIG_ALTREF2
+  THR_COMP_ZEROLA2,
+  THR_COMP_ZEROL2A2,
+  THR_COMP_ZEROL3A2,
+  THR_COMP_ZEROGA2,
+#endif  // CONFIG_ALTEF2
+
+#if CONFIG_EXT_COMP_REFS
+  THR_COMP_ZEROLL2,
+  THR_COMP_ZEROLL3,
+  THR_COMP_ZEROLG,
+  THR_COMP_ZEROBA,
+#endif  // CONFIG_EXT_COMP_REFS
 #endif  // CONFIG_EXT_REFS
 
 #endif  // CONFIG_EXT_INTER
@@ -306,6 +466,13 @@ typedef enum {
   THR_COMP_INTERINTRA_NEARESTB,
   THR_COMP_INTERINTRA_NEARB,
   THR_COMP_INTERINTRA_NEWB,
+
+#if CONFIG_ALTREF2
+  THR_COMP_INTERINTRA_ZEROA2,
+  THR_COMP_INTERINTRA_NEARESTA2,
+  THR_COMP_INTERINTRA_NEARA2,
+  THR_COMP_INTERINTRA_NEWA2,
+#endif  // CONFIG_ALTREF2
 #endif  // CONFIG_EXT_REFS
 
   THR_COMP_INTERINTRA_ZEROA,
@@ -322,6 +489,9 @@ typedef enum {
   THR_LAST2,
   THR_LAST3,
   THR_BWDR,
+#if CONFIG_ALTREF2
+  THR_ALTR2,
+#endif  // CONFIG_ALTREF2
 #endif  // CONFIG_EXT_REFS
   THR_GOLD,
   THR_ALTR,
@@ -338,9 +508,18 @@ typedef enum {
   THR_COMP_L2B,
   THR_COMP_L3B,
   THR_COMP_GB,
+
+#if CONFIG_ALTREF2
+  THR_COMP_LA2,
+  THR_COMP_L2A2,
+  THR_COMP_L3A2,
+  THR_COMP_GA2,
+#endif  // CONFIG_ALTREF2
 #endif  // CONFIG_EXT_REFS
 
   THR_INTRA,
+
+  MAX_REFS
 } THR_MODES_SUB8X8;
 
 typedef struct RD_OPT {
@@ -351,24 +530,116 @@ typedef struct RD_OPT {
   int thresh_mult[MAX_MODES];
   int thresh_mult_sub8x8[MAX_REFS];
 
-  int threshes[MAX_SEGMENTS][BLOCK_SIZES][MAX_MODES];
+  int threshes[MAX_SEGMENTS][BLOCK_SIZES_ALL][MAX_MODES];
 
   int64_t prediction_type_threshes[TOTAL_REFS_PER_FRAME][REFERENCE_MODES];
 
   int RDMULT;
-  int RDDIV;
 } RD_OPT;
 
-typedef struct RD_COST {
-  int rate;
-  int64_t dist;
-  int64_t rdcost;
-} RD_COST;
+static INLINE void av1_init_rd_stats(RD_STATS *rd_stats) {
+#if CONFIG_RD_DEBUG
+  int plane;
+#endif
+  rd_stats->rate = 0;
+  rd_stats->dist = 0;
+  rd_stats->rdcost = 0;
+  rd_stats->sse = 0;
+  rd_stats->skip = 1;
+  rd_stats->zero_rate = 0;
+  rd_stats->invalid_rate = 0;
+  rd_stats->ref_rdcost = INT64_MAX;
+#if CONFIG_DIST_8X8 && CONFIG_CB4X4
+  rd_stats->dist_y = 0;
+#endif
+#if CONFIG_RD_DEBUG
+  for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
+    rd_stats->txb_coeff_cost[plane] = 0;
+#if CONFIG_VAR_TX
+    {
+      int r, c;
+      for (r = 0; r < TXB_COEFF_COST_MAP_SIZE; ++r)
+        for (c = 0; c < TXB_COEFF_COST_MAP_SIZE; ++c)
+          rd_stats->txb_coeff_cost_map[plane][r][c] = 0;
+    }
+#endif
+  }
+#endif
+}
 
-// Reset the rate distortion cost values to maximum (invalid) value.
-void av1_rd_cost_reset(RD_COST *rd_cost);
-// Initialize the rate distortion cost values to zero.
-void av1_rd_cost_init(RD_COST *rd_cost);
+static INLINE void av1_invalid_rd_stats(RD_STATS *rd_stats) {
+#if CONFIG_RD_DEBUG
+  int plane;
+#endif
+  rd_stats->rate = INT_MAX;
+  rd_stats->dist = INT64_MAX;
+  rd_stats->rdcost = INT64_MAX;
+  rd_stats->sse = INT64_MAX;
+  rd_stats->skip = 0;
+  rd_stats->zero_rate = 0;
+  rd_stats->invalid_rate = 1;
+  rd_stats->ref_rdcost = INT64_MAX;
+#if CONFIG_DIST_8X8 && CONFIG_CB4X4
+  rd_stats->dist_y = INT64_MAX;
+#endif
+#if CONFIG_RD_DEBUG
+  for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
+    rd_stats->txb_coeff_cost[plane] = INT_MAX;
+#if CONFIG_VAR_TX
+    {
+      int r, c;
+      for (r = 0; r < TXB_COEFF_COST_MAP_SIZE; ++r)
+        for (c = 0; c < TXB_COEFF_COST_MAP_SIZE; ++c)
+          rd_stats->txb_coeff_cost_map[plane][r][c] = INT_MAX;
+    }
+#endif
+  }
+#endif
+}
+
+static INLINE void av1_merge_rd_stats(RD_STATS *rd_stats_dst,
+                                      const RD_STATS *rd_stats_src) {
+#if CONFIG_RD_DEBUG
+  int plane;
+#endif
+  rd_stats_dst->rate += rd_stats_src->rate;
+  rd_stats_dst->dist += rd_stats_src->dist;
+  rd_stats_dst->sse += rd_stats_src->sse;
+  rd_stats_dst->skip &= rd_stats_src->skip;
+  rd_stats_dst->invalid_rate &= rd_stats_src->invalid_rate;
+#if CONFIG_DIST_8X8 && CONFIG_CB4X4
+  rd_stats_dst->dist_y += rd_stats_src->dist_y;
+#endif
+#if CONFIG_RD_DEBUG
+  for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
+    rd_stats_dst->txb_coeff_cost[plane] += rd_stats_src->txb_coeff_cost[plane];
+#if CONFIG_VAR_TX
+    {
+      // TODO(angiebird): optimize this part
+      int r, c;
+      int ref_txb_coeff_cost = 0;
+      for (r = 0; r < TXB_COEFF_COST_MAP_SIZE; ++r)
+        for (c = 0; c < TXB_COEFF_COST_MAP_SIZE; ++c) {
+          rd_stats_dst->txb_coeff_cost_map[plane][r][c] +=
+              rd_stats_src->txb_coeff_cost_map[plane][r][c];
+          ref_txb_coeff_cost += rd_stats_dst->txb_coeff_cost_map[plane][r][c];
+        }
+      assert(ref_txb_coeff_cost == rd_stats_dst->txb_coeff_cost[plane]);
+    }
+#endif
+  }
+#endif
+}
+
+static INLINE int av1_get_coeff_token_cost(int token, int eob_val, int is_first,
+                                           const int *head_cost_table,
+                                           const int *tail_cost_table) {
+  if (eob_val == LAST_EOB) return av1_cost_zero(128);
+  const int comb_symb = 2 * AOMMIN(token, TWO_TOKEN) - eob_val + is_first;
+  int cost = head_cost_table[comb_symb];
+  if (token > ONE_TOKEN) cost += tail_cost_table[token - TWO_TOKEN];
+  return cost;
+}
 
 struct TileInfo;
 struct TileDataEnc;
@@ -385,7 +656,8 @@ void av1_initialize_me_consts(const struct AV1_COMP *cpi, MACROBLOCK *x,
 void av1_model_rd_from_var_lapndz(int64_t var, unsigned int n,
                                   unsigned int qstep, int *rate, int64_t *dist);
 
-int av1_get_switchable_rate(const struct AV1_COMP *cpi, const MACROBLOCKD *xd);
+int av1_get_switchable_rate(const AV1_COMMON *const cm, MACROBLOCK *x,
+                            const MACROBLOCKD *xd);
 
 int av1_raster_block_offset(BLOCK_SIZE plane_bsize, int raster_block,
                             int stride);
@@ -398,10 +670,8 @@ YV12_BUFFER_CONFIG *av1_get_scaled_ref_frame(const struct AV1_COMP *cpi,
 
 void av1_init_me_luts(void);
 
-#if CONFIG_REF_MV
 void av1_set_mvcost(MACROBLOCK *x, MV_REFERENCE_FRAME ref_frame, int ref,
                     int ref_mv_idx);
-#endif
 
 void av1_get_entropy_contexts(BLOCK_SIZE bsize, TX_SIZE tx_size,
                               const struct macroblockd_plane *pd,
@@ -415,9 +685,6 @@ void av1_set_rd_speed_thresholds_sub8x8(struct AV1_COMP *cpi);
 void av1_update_rd_thresh_fact(const AV1_COMMON *const cm,
                                int (*fact)[MAX_MODES], int rd_thresh, int bsize,
                                int best_mode_index);
-
-void av1_fill_token_costs(av1_coeff_cost *c,
-                          av1_coeff_probs_model (*p)[PLANE_TYPES]);
 
 static INLINE int rd_less_than_thresh(int64_t best_rd, int thresh,
                                       int thresh_fact) {
@@ -441,6 +708,16 @@ void av1_setup_pred_block(const MACROBLOCKD *xd,
 
 int av1_get_intra_cost_penalty(int qindex, int qdelta,
                                aom_bit_depth_t bit_depth);
+
+void av1_fill_mode_rates(AV1_COMMON *const cm, MACROBLOCK *x,
+                         FRAME_CONTEXT *fc);
+
+#if CONFIG_LV_MAP
+void av1_fill_coeff_costs(MACROBLOCK *x, FRAME_CONTEXT *fc);
+#endif
+
+void av1_fill_token_costs_from_cdf(av1_coeff_cost *cost,
+                                   coeff_cdf_model (*cdf)[PLANE_TYPES]);
 
 #ifdef __cplusplus
 }  // extern "C"

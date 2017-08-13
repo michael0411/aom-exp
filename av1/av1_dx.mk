@@ -33,6 +33,11 @@ AV1_DX_SRCS-yes += decoder/decoder.h
 AV1_DX_SRCS-yes += decoder/dsubexp.c
 AV1_DX_SRCS-yes += decoder/dsubexp.h
 
+ifeq ($(CONFIG_ACCOUNTING),yes)
+AV1_DX_SRCS-yes += decoder/accounting.h
+AV1_DX_SRCS-yes += decoder/accounting.c
+endif
+
 ifeq ($(CONFIG_INSPECTION),yes)
 AV1_DX_SRCS-yes += decoder/inspection.c
 AV1_DX_SRCS-yes += decoder/inspection.h
@@ -53,7 +58,7 @@ AV1_DX_SRCS-$(HAVE_SSE2) += encoder/x86/dct_sse2.asm
 AV1_DX_SRCS-$(HAVE_SSE2) += encoder/x86/dct_intrin_sse2.c
 AV1_DX_SRCS-$(HAVE_SSSE3) += encoder/x86/dct_ssse3.c
 
-ifneq ($(CONFIG_AOM_HIGHBITDEPTH),yes)
+ifneq ($(CONFIG_HIGHBITDEPTH),yes)
 AV1_DX_SRCS-$(HAVE_NEON) += encoder/arm/neon/dct_neon.c
 endif
 

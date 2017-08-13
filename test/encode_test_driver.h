@@ -163,7 +163,7 @@ class EncoderTest {
  protected:
   explicit EncoderTest(const CodecFactory *codec)
       : codec_(codec), abort_(false), init_flags_(0), frame_flags_(0),
-        last_pts_(0) {
+        last_pts_(0), mode_(kRealTime) {
     // Default to 1 thread.
     cfg_.g_threads = 1;
   }
@@ -232,13 +232,13 @@ class EncoderTest {
 
   bool abort_;
   aom_codec_enc_cfg_t cfg_;
-  aom_codec_dec_cfg_t dec_cfg_;
   unsigned int passes_;
   unsigned long deadline_;
   TwopassStatsStore stats_;
   unsigned long init_flags_;
   unsigned long frame_flags_;
   aom_codec_pts_t last_pts_;
+  TestMode mode_;
 };
 
 }  // namespace libaom_test

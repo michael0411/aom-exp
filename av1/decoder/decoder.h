@@ -23,7 +23,7 @@
 #include "av1/common/onyxc_int.h"
 #include "av1/decoder/dthread.h"
 #if CONFIG_ACCOUNTING
-#include "av1/common/accounting.h"
+#include "av1/decoder/accounting.h"
 #endif
 #if CONFIG_INSPECTION
 #include "av1/decoder/inspection.h"
@@ -50,12 +50,11 @@ typedef struct TileData {
   /* forward transformed predicted image, a reference for PVQ */
   DECLARE_ALIGNED(16, tran_low_t, pvq_ref_coeff[OD_TXSIZE_MAX * OD_TXSIZE_MAX]);
 #endif
-#if CONFIG_EC_ADAPT
-  FRAME_CONTEXT tctx;
+#if CONFIG_CFL
+  CFL_CTX cfl;
 #endif
-#if CONFIG_PALETTE
+  DECLARE_ALIGNED(16, FRAME_CONTEXT, tctx);
   DECLARE_ALIGNED(16, uint8_t, color_index_map[2][MAX_SB_SQUARE]);
-#endif  // CONFIG_PALETTE
 } TileData;
 
 typedef struct TileWorkerData {
@@ -69,12 +68,11 @@ typedef struct TileWorkerData {
   /* forward transformed predicted image, a reference for PVQ */
   DECLARE_ALIGNED(16, tran_low_t, pvq_ref_coeff[OD_TXSIZE_MAX * OD_TXSIZE_MAX]);
 #endif
-#if CONFIG_EC_ADAPT
-  FRAME_CONTEXT tctx;
+#if CONFIG_CFL
+  CFL_CTX cfl;
 #endif
-#if CONFIG_PALETTE
+  FRAME_CONTEXT tctx;
   DECLARE_ALIGNED(16, uint8_t, color_index_map[2][MAX_SB_SQUARE]);
-#endif  // CONFIG_PALETTE
   struct aom_internal_error_info error_info;
 } TileWorkerData;
 
@@ -116,6 +114,7 @@ typedef struct AV1Decoder {
   aom_decrypt_cb decrypt_cb;
   void *decrypt_state;
 
+  int allow_lowbitdepth;
   int max_threads;
   int inv_tile_order;
   int need_resync;   // wait for key/intra-only frame.
@@ -124,19 +123,17 @@ typedef struct AV1Decoder {
   int tile_size_bytes;
 #if CONFIG_EXT_TILE
   int tile_col_size_bytes;
-  int dec_tile_row, dec_tile_col;
-#endif  // CONFIG_EXT_TILE
+  int dec_tile_row, dec_tile_col;  // always -1 for non-VR tile encoding
+#endif                             // CONFIG_EXT_TILE
 #if CONFIG_ACCOUNTING
   int acct_enabled;
   Accounting accounting;
 #endif
   size_t uncomp_hdr_size;       // Size of the uncompressed header
   size_t first_partition_size;  // Size of the compressed header
-#if CONFIG_TILE_GROUPS
-  int tg_size;   // Number of tiles in the current tilegroup
-  int tg_start;  // First tile in the current tilegroup
+  int tg_size;                  // Number of tiles in the current tilegroup
+  int tg_start;                 // First tile in the current tilegroup
   int tg_size_bit_offset;
-#endif
 #if CONFIG_REFERENCE_BUFFER
   SequenceHeader seq_params;
 #endif
@@ -175,6 +172,7 @@ static INLINE uint8_t read_marker(aom_decrypt_cb decrypt_cb,
 // "read_marker".
 aom_codec_err_t av1_parse_superframe_index(const uint8_t *data, size_t data_sz,
                                            uint32_t sizes[8], int *count,
+                                           int *index_size,
                                            aom_decrypt_cb decrypt_cb,
                                            void *decrypt_state);
 
@@ -197,7 +195,7 @@ static INLINE void decrease_ref_count(int idx, RefCntBuffer *const frame_bufs,
   }
 }
 
-#if CONFIG_EXT_REFS
+#if CONFIG_EXT_REFS || CONFIG_TEMPMV_SIGNALING
 static INLINE int dec_is_ref_frame_buf(AV1Decoder *const pbi,
                                        RefCntBuffer *frame_buf) {
   AV1_COMMON *const cm = &pbi->common;
@@ -210,6 +208,18 @@ static INLINE int dec_is_ref_frame_buf(AV1Decoder *const pbi,
   return (i < INTER_REFS_PER_FRAME);
 }
 #endif  // CONFIG_EXT_REFS
+
+#define ACCT_STR __func__
+static INLINE int av1_read_uniform(aom_reader *r, int n) {
+  const int l = get_unsigned_bits(n);
+  const int m = (1 << l) - n;
+  const int v = aom_read_literal(r, l - 1, ACCT_STR);
+  assert(l != 0);
+  if (v < m)
+    return v;
+  else
+    return (v << 1) - m + aom_read_literal(r, 1, ACCT_STR);
+}
 
 #ifdef __cplusplus
 }  // extern "C"

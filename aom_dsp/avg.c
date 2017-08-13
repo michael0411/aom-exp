@@ -13,26 +13,6 @@
 #include "./aom_dsp_rtcd.h"
 #include "aom_ports/mem.h"
 
-unsigned int aom_avg_8x8_c(const uint8_t *src, int stride) {
-  int i, j;
-  int sum = 0;
-  for (i = 0; i < 8; ++i, src += stride)
-    for (j = 0; j < 8; sum += src[j], ++j) {
-    }
-
-  return ROUND_POWER_OF_TWO(sum, 6);
-}
-
-unsigned int aom_avg_4x4_c(const uint8_t *src, int stride) {
-  int i, j;
-  int sum = 0;
-  for (i = 0; i < 4; ++i, src += stride)
-    for (j = 0; j < 4; sum += src[j], ++j) {
-    }
-
-  return ROUND_POWER_OF_TWO(sum, 4);
-}
-
 // src_diff: first pass, 9 bit, dynamic range [-255, 255]
 //           second pass, 12 bit, dynamic range [-2040, 2040]
 static void hadamard_col8(const int16_t *src_diff, int src_stride,
@@ -134,8 +114,8 @@ int aom_satd_c(const int16_t *coeff, int length) {
 
 // Integer projection onto row vectors.
 // height: value range {16, 32, 64}.
-void aom_int_pro_row_c(int16_t hbuf[16], const uint8_t *ref,
-                       const int ref_stride, const int height) {
+void aom_int_pro_row_c(int16_t hbuf[16], const uint8_t *ref, int ref_stride,
+                       int height) {
   int idx;
   const int norm_factor = height >> 1;
   for (idx = 0; idx < 16; ++idx) {
@@ -150,7 +130,7 @@ void aom_int_pro_row_c(int16_t hbuf[16], const uint8_t *ref,
 }
 
 // width: value range {16, 32, 64}.
-int16_t aom_int_pro_col_c(const uint8_t *ref, const int width) {
+int16_t aom_int_pro_col_c(const uint8_t *ref, int width) {
   int idx;
   int16_t sum = 0;
   // sum: 14 bit, dynamic range [0, 16320]
@@ -161,7 +141,7 @@ int16_t aom_int_pro_col_c(const uint8_t *ref, const int width) {
 // ref: [0 - 510]
 // src: [0 - 510]
 // bwl: {2, 3, 4}
-int aom_vector_var_c(const int16_t *ref, const int16_t *src, const int bwl) {
+int aom_vector_var_c(const int16_t *ref, const int16_t *src, int bwl) {
   int i;
   int width = 4 << bwl;
   int sse = 0, mean = 0, var;
@@ -191,29 +171,7 @@ void aom_minmax_8x8_c(const uint8_t *src, int src_stride, const uint8_t *ref,
   }
 }
 
-#if CONFIG_AOM_HIGHBITDEPTH
-unsigned int aom_highbd_avg_8x8_c(const uint8_t *src, int stride) {
-  int i, j;
-  int sum = 0;
-  const uint16_t *s = CONVERT_TO_SHORTPTR(src);
-  for (i = 0; i < 8; ++i, s += stride)
-    for (j = 0; j < 8; sum += s[j], ++j) {
-    }
-
-  return ROUND_POWER_OF_TWO(sum, 6);
-}
-
-unsigned int aom_highbd_avg_4x4_c(const uint8_t *src, int stride) {
-  int i, j;
-  int sum = 0;
-  const uint16_t *s = CONVERT_TO_SHORTPTR(src);
-  for (i = 0; i < 4; ++i, s += stride)
-    for (j = 0; j < 4; sum += s[j], ++j) {
-    }
-
-  return ROUND_POWER_OF_TWO(sum, 4);
-}
-
+#if CONFIG_HIGHBITDEPTH
 void aom_highbd_minmax_8x8_c(const uint8_t *s8, int p, const uint8_t *d8,
                              int dp, int *min, int *max) {
   int i, j;
@@ -229,4 +187,4 @@ void aom_highbd_minmax_8x8_c(const uint8_t *s8, int p, const uint8_t *d8,
     }
   }
 }
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH

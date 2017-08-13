@@ -40,12 +40,12 @@ const sgr_params_type sgr_params[SGRPROJ_PARAMS] = {
 typedef void (*restore_func_type)(uint8_t *data8, int width, int height,
                                   int stride, RestorationInternal *rst,
                                   uint8_t *dst8, int dst_stride);
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 typedef void (*restore_func_highbd_type)(uint8_t *data8, int width, int height,
                                          int stride, RestorationInternal *rst,
                                          int bit_depth, uint8_t *dst8,
                                          int dst_stride);
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
 
 int av1_alloc_restoration_struct(AV1_COMMON *cm, RestorationInfo *rst_info,
                                  int width, int height) {
@@ -160,9 +160,16 @@ static void loop_wiener_filter_tile(uint8_t *data, int tile_idx, int width,
       int h = AOMMIN(MAX_SB_SIZE, (v_end - i + 15) & ~15);
       const uint8_t *data_p = data + i * stride + j;
       uint8_t *dst_p = dst + i * dst_stride + j;
+#if USE_WIENER_HIGH_INTERMEDIATE_PRECISION
+      aom_convolve8_add_src_hip(data_p, stride, dst_p, dst_stride,
+                                rst->rsi->wiener_info[tile_idx].hfilter, 16,
+                                rst->rsi->wiener_info[tile_idx].vfilter, 16, w,
+                                h);
+#else
       aom_convolve8_add_src(data_p, stride, dst_p, dst_stride,
                             rst->rsi->wiener_info[tile_idx].hfilter, 16,
                             rst->rsi->wiener_info[tile_idx].vfilter, 16, w, h);
+#endif  // USE_WIENER_HIGH_INTERMEDIATE_PRECISION
     }
 }
 
@@ -929,7 +936,7 @@ static void loop_switchable_filter(uint8_t *data, int width, int height,
   }
 }
 
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 void extend_frame_highbd(uint16_t *data, int width, int height, int stride) {
   uint16_t *data_p;
   int i, j;
@@ -992,10 +999,17 @@ static void loop_wiener_filter_tile_highbd(uint16_t *data, int tile_idx,
       int h = AOMMIN(MAX_SB_SIZE, (v_end - i + 15) & ~15);
       const uint16_t *data_p = data + i * stride + j;
       uint16_t *dst_p = dst + i * dst_stride + j;
+#if USE_WIENER_HIGH_INTERMEDIATE_PRECISION
+      aom_highbd_convolve8_add_src_hip(
+          CONVERT_TO_BYTEPTR(data_p), stride, CONVERT_TO_BYTEPTR(dst_p),
+          dst_stride, rst->rsi->wiener_info[tile_idx].hfilter, 16,
+          rst->rsi->wiener_info[tile_idx].vfilter, 16, w, h, bit_depth);
+#else
       aom_highbd_convolve8_add_src(
           CONVERT_TO_BYTEPTR(data_p), stride, CONVERT_TO_BYTEPTR(dst_p),
           dst_stride, rst->rsi->wiener_info[tile_idx].hfilter, 16,
           rst->rsi->wiener_info[tile_idx].vfilter, 16, w, h, bit_depth);
+#endif  // USE_WIENER_HIGH_INTERMEDIATE_PRECISION
     }
 }
 
@@ -1216,15 +1230,17 @@ static void loop_switchable_filter_highbd(uint8_t *data8, int width, int height,
     }
   }
 }
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
 
 static void loop_restoration_rows(YV12_BUFFER_CONFIG *frame, AV1_COMMON *cm,
                                   int start_mi_row, int end_mi_row,
                                   int components_pattern, RestorationInfo *rsi,
                                   YV12_BUFFER_CONFIG *dst) {
   const int ywidth = frame->y_crop_width;
-  const int ystride = frame->y_stride;
+  const int yheight = frame->y_crop_height;
   const int uvwidth = frame->uv_crop_width;
+  const int uvheight = frame->uv_crop_height;
+  const int ystride = frame->y_stride;
   const int uvstride = frame->uv_stride;
   const int ystart = start_mi_row << MI_SIZE_LOG2;
   const int uvstart = ystart >> cm->subsampling_y;
@@ -1233,20 +1249,20 @@ static void loop_restoration_rows(YV12_BUFFER_CONFIG *frame, AV1_COMMON *cm,
   restore_func_type restore_funcs[RESTORE_TYPES] = {
     NULL, loop_wiener_filter, loop_sgrproj_filter, loop_switchable_filter
   };
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
   restore_func_highbd_type restore_funcs_highbd[RESTORE_TYPES] = {
     NULL, loop_wiener_filter_highbd, loop_sgrproj_filter_highbd,
     loop_switchable_filter_highbd
   };
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
   restore_func_type restore_func;
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
   restore_func_highbd_type restore_func_highbd;
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
   YV12_BUFFER_CONFIG dst_;
 
-  yend = AOMMIN(yend, cm->height);
-  uvend = AOMMIN(uvend, cm->subsampling_y ? (cm->height + 1) >> 1 : cm->height);
+  yend = AOMMIN(yend, yheight);
+  uvend = AOMMIN(uvend, uvheight);
 
   if (components_pattern == (1 << AOM_PLANE_Y)) {
     // Only y
@@ -1281,8 +1297,8 @@ static void loop_restoration_rows(YV12_BUFFER_CONFIG *frame, AV1_COMMON *cm,
     dst = &dst_;
     memset(dst, 0, sizeof(YV12_BUFFER_CONFIG));
     if (aom_realloc_frame_buffer(
-            dst, cm->width, cm->height, cm->subsampling_x, cm->subsampling_y,
-#if CONFIG_AOM_HIGHBITDEPTH
+            dst, ywidth, yheight, cm->subsampling_x, cm->subsampling_y,
+#if CONFIG_HIGHBITDEPTH
             cm->use_highbitdepth,
 #endif
             AOM_BORDER_IN_PIXELS, cm->byte_alignment, NULL, NULL, NULL) < 0)
@@ -1293,13 +1309,13 @@ static void loop_restoration_rows(YV12_BUFFER_CONFIG *frame, AV1_COMMON *cm,
   if ((components_pattern >> AOM_PLANE_Y) & 1) {
     if (rsi[0].frame_restoration_type != RESTORE_NONE) {
       cm->rst_internal.ntiles = av1_get_rest_ntiles(
-          cm->width, cm->height, cm->rst_info[AOM_PLANE_Y].restoration_tilesize,
+          ywidth, yheight, cm->rst_info[AOM_PLANE_Y].restoration_tilesize,
           &cm->rst_internal.tile_width, &cm->rst_internal.tile_height,
           &cm->rst_internal.nhtiles, &cm->rst_internal.nvtiles);
       cm->rst_internal.rsi = &rsi[0];
       restore_func =
           restore_funcs[cm->rst_internal.rsi->frame_restoration_type];
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
       restore_func_highbd =
           restore_funcs_highbd[cm->rst_internal.rsi->frame_restoration_type];
       if (cm->use_highbitdepth)
@@ -1308,7 +1324,7 @@ static void loop_restoration_rows(YV12_BUFFER_CONFIG *frame, AV1_COMMON *cm,
             &cm->rst_internal, cm->bit_depth,
             dst->y_buffer + ystart * dst->y_stride, dst->y_stride);
       else
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
         restore_func(frame->y_buffer + ystart * ystride, ywidth, yend - ystart,
                      ystride, &cm->rst_internal,
                      dst->y_buffer + ystart * dst->y_stride, dst->y_stride);
@@ -1320,15 +1336,13 @@ static void loop_restoration_rows(YV12_BUFFER_CONFIG *frame, AV1_COMMON *cm,
   if ((components_pattern >> AOM_PLANE_U) & 1) {
     if (rsi[AOM_PLANE_U].frame_restoration_type != RESTORE_NONE) {
       cm->rst_internal.ntiles = av1_get_rest_ntiles(
-          ROUND_POWER_OF_TWO(cm->width, cm->subsampling_x),
-          ROUND_POWER_OF_TWO(cm->height, cm->subsampling_y),
-          cm->rst_info[AOM_PLANE_U].restoration_tilesize,
+          uvwidth, uvheight, cm->rst_info[AOM_PLANE_U].restoration_tilesize,
           &cm->rst_internal.tile_width, &cm->rst_internal.tile_height,
           &cm->rst_internal.nhtiles, &cm->rst_internal.nvtiles);
       cm->rst_internal.rsi = &rsi[AOM_PLANE_U];
       restore_func =
           restore_funcs[cm->rst_internal.rsi->frame_restoration_type];
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
       restore_func_highbd =
           restore_funcs_highbd[cm->rst_internal.rsi->frame_restoration_type];
       if (cm->use_highbitdepth)
@@ -1337,7 +1351,7 @@ static void loop_restoration_rows(YV12_BUFFER_CONFIG *frame, AV1_COMMON *cm,
             uvstride, &cm->rst_internal, cm->bit_depth,
             dst->u_buffer + uvstart * dst->uv_stride, dst->uv_stride);
       else
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
         restore_func(frame->u_buffer + uvstart * uvstride, uvwidth,
                      uvend - uvstart, uvstride, &cm->rst_internal,
                      dst->u_buffer + uvstart * dst->uv_stride, dst->uv_stride);
@@ -1349,15 +1363,13 @@ static void loop_restoration_rows(YV12_BUFFER_CONFIG *frame, AV1_COMMON *cm,
   if ((components_pattern >> AOM_PLANE_V) & 1) {
     if (rsi[AOM_PLANE_V].frame_restoration_type != RESTORE_NONE) {
       cm->rst_internal.ntiles = av1_get_rest_ntiles(
-          ROUND_POWER_OF_TWO(cm->width, cm->subsampling_x),
-          ROUND_POWER_OF_TWO(cm->height, cm->subsampling_y),
-          cm->rst_info[AOM_PLANE_V].restoration_tilesize,
+          uvwidth, uvheight, cm->rst_info[AOM_PLANE_V].restoration_tilesize,
           &cm->rst_internal.tile_width, &cm->rst_internal.tile_height,
           &cm->rst_internal.nhtiles, &cm->rst_internal.nvtiles);
       cm->rst_internal.rsi = &rsi[AOM_PLANE_V];
       restore_func =
           restore_funcs[cm->rst_internal.rsi->frame_restoration_type];
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
       restore_func_highbd =
           restore_funcs_highbd[cm->rst_internal.rsi->frame_restoration_type];
       if (cm->use_highbitdepth)
@@ -1366,7 +1378,7 @@ static void loop_restoration_rows(YV12_BUFFER_CONFIG *frame, AV1_COMMON *cm,
             uvstride, &cm->rst_internal, cm->bit_depth,
             dst->v_buffer + uvstart * dst->uv_stride, dst->uv_stride);
       else
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
         restore_func(frame->v_buffer + uvstart * uvstride, uvwidth,
                      uvend - uvstart, uvstride, &cm->rst_internal,
                      dst->v_buffer + uvstart * dst->uv_stride, dst->uv_stride);
@@ -1388,11 +1400,16 @@ void av1_loop_restoration_frame(YV12_BUFFER_CONFIG *frame, AV1_COMMON *cm,
                                 int partial_frame, YV12_BUFFER_CONFIG *dst) {
   int start_mi_row, end_mi_row, mi_rows_to_filter;
   start_mi_row = 0;
+#if CONFIG_FRAME_SUPERRES
+  mi_rows_to_filter =
+      ALIGN_POWER_OF_TWO(cm->superres_upscaled_height, 3) >> MI_SIZE_LOG2;
+#else
   mi_rows_to_filter = cm->mi_rows;
-  if (partial_frame && cm->mi_rows > 8) {
-    start_mi_row = cm->mi_rows >> 1;
+#endif  // CONFIG_FRAME_SUPERRES
+  if (partial_frame && mi_rows_to_filter > 8) {
+    start_mi_row = mi_rows_to_filter >> 1;
     start_mi_row &= 0xfffffff8;
-    mi_rows_to_filter = AOMMAX(cm->mi_rows / 8, 8);
+    mi_rows_to_filter = AOMMAX(mi_rows_to_filter / 8, 8);
   }
   end_mi_row = start_mi_row + mi_rows_to_filter;
   loop_restoration_init(&cm->rst_internal, cm->frame_type == KEY_FRAME);

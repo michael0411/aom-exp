@@ -35,8 +35,7 @@ static void aom_encode_pvq_split(aom_writer *w, od_pvq_codeword_ctx *adapt,
     sum >>= shift;
   }
   fctx = 7*ctx + sum - 1;
-  aom_encode_cdf_adapt(w, count, adapt->pvq_split_cdf[fctx], sum + 1,
-   adapt->pvq_split_increment);
+  aom_write_symbol_pvq(w, count, adapt->pvq_split_cdf[fctx], sum + 1);
   if (shift) aom_write_literal(w, rest, shift);
 }
 
@@ -52,8 +51,7 @@ void aom_encode_band_pvq_splits(aom_writer *w, od_pvq_codeword_ctx *adapt,
     cdf_id = od_pvq_k1_ctx(n, level == 0);
     for (pos = 0; !y[pos]; pos++);
     OD_ASSERT(pos < n);
-    aom_encode_cdf_adapt(w, pos, adapt->pvq_k1_cdf[cdf_id], n,
-     adapt->pvq_k1_increment);
+    aom_write_symbol_pvq(w, pos, adapt->pvq_k1_cdf[cdf_id], n);
   }
   else {
     mid = n >> 1;
@@ -73,28 +71,22 @@ void aom_encode_band_pvq_splits(aom_writer *w, od_pvq_codeword_ctx *adapt,
  * @param [in]     x       variable to encode (has to be positive)
  * @param [in]     decay   decay factor of the distribution in Q8 format,
  * i.e. pdf ~= decay^x
- * @param [in]     max     maximum possible value of x (used to truncate
- * the pdf)
  */
-void aom_laplace_encode_special(aom_writer *w, int x, unsigned decay, int max) {
+void aom_laplace_encode_special(aom_writer *w, int x, unsigned decay) {
   int shift;
   int xs;
-  int ms;
   int sym;
   const uint16_t *cdf;
   shift = 0;
-  if (max == 0) return;
   /* We don't want a large decay value because that would require too many
-     symbols. However, it's OK if the max is below 15. */
-  while (((max >> shift) >= 15 || max == -1) && decay > 235) {
+     symbols. */
+  while (decay > 235) {
     decay = (decay*decay + 128) >> 8;
     shift++;
   }
-  OD_ASSERT(x <= max || max == -1);
   decay = OD_MINI(decay, 254);
   decay = OD_MAXI(decay, 2);
   xs = x >> shift;
-  ms = max >> shift;
   cdf = EXP_CDF_TABLE[(decay + 1) >> 1];
   OD_LOG((OD_LOG_PVQ, OD_LOG_DEBUG, "decay = %d", decay));
   do {
@@ -108,16 +100,8 @@ void aom_laplace_encode_special(aom_writer *w, int x, unsigned decay, int max) {
       }
       OD_LOG_PARTIAL((OD_LOG_PVQ, OD_LOG_DEBUG, "\n"));
     }
-    if (ms > 0 && ms < 15) {
-      /* Simple way of truncating the pdf when we have a bound */
-      aom_write_cdf_unscaled(w, sym, cdf, ms + 1);
-    }
-    else {
-      aom_write_cdf(w, sym, cdf, 16);
-    }
+    aom_write_cdf(w, sym, cdf, 16);
     xs -= 15;
-    ms -= 15;
-  }
-  while (sym >= 15 && ms != 0);
+  } while (sym >= 15);
   if (shift) aom_write_literal(w, x & ((1 << shift) - 1), shift);
 }

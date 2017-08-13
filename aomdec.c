@@ -87,8 +87,6 @@ static const arg_def_t frameparallelarg =
     ARG_DEF(NULL, "frame-parallel", 0, "Frame parallel decode");
 static const arg_def_t verbosearg =
     ARG_DEF("v", "verbose", 0, "Show version string");
-static const arg_def_t error_concealment =
-    ARG_DEF(NULL, "error-concealment", 0, "Enable decoder error-concealment");
 static const arg_def_t scalearg =
     ARG_DEF("S", "scale", 0, "Scale output frames uniformly");
 static const arg_def_t continuearg =
@@ -99,7 +97,7 @@ static const arg_def_t md5arg =
     ARG_DEF(NULL, "md5", 0, "Compute the MD5 sum of the decoded frame");
 static const arg_def_t framestatsarg =
     ARG_DEF(NULL, "framestats", 1, "Output per-frame stats (.csv format)");
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 static const arg_def_t outbitdeptharg =
     ARG_DEF(NULL, "output-bit-depth", 1, "Output bit-depth for decoded frames");
 #endif
@@ -131,9 +129,8 @@ static const arg_def_t *all_args[] = { &codecarg,
                                        &fb_arg,
                                        &md5arg,
                                        &framestatsarg,
-                                       &error_concealment,
                                        &continuearg,
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
                                        &outbitdeptharg,
 #endif
 #if CONFIG_EXT_TILE
@@ -145,7 +142,7 @@ static const arg_def_t *all_args[] = { &codecarg,
 #if CONFIG_LIBYUV
 static INLINE int libyuv_scale(aom_image_t *src, aom_image_t *dst,
                                FilterModeEnum mode) {
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
   if (src->fmt == AOM_IMG_FMT_I42016) {
     assert(dst->fmt == AOM_IMG_FMT_I42016);
     return I420Scale_16(
@@ -287,7 +284,7 @@ static void update_image_md5(const aom_image_t *img, const int planes[3],
 static void write_image_file(const aom_image_t *img, const int planes[3],
                              FILE *file) {
   int i, y;
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
   const int bytes_per_sample = ((img->fmt & AOM_IMG_FMT_HIGHBITDEPTH) ? 2 : 1);
 #else
   const int bytes_per_sample = 1;
@@ -311,8 +308,6 @@ static int file_is_raw(struct AvxInputContext *input) {
   uint8_t buf[32];
   int is_raw = 0;
   aom_codec_stream_info_t si;
-
-  si.sz = sizeof(si);
 
   if (fread(buf, 1, 32, input->file) == 32) {
     int i;
@@ -488,7 +483,7 @@ static FILE *open_outfile(const char *name) {
   }
 }
 
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 static int img_shifted_realloc_required(const aom_image_t *img,
                                         const aom_image_t *shifted,
                                         aom_img_fmt_t required_fmt) {
@@ -509,7 +504,6 @@ static int main_loop(int argc, const char **argv_) {
   int do_md5 = 0, progress = 0, frame_parallel = 0;
   int stop_after = 0, postproc = 0, summary = 0, quiet = 1;
   int arg_skip = 0;
-  int ec_enabled = 0;
   int keep_going = 0;
   const AvxInterface *interface = NULL;
   const AvxInterface *fourcc_interface = NULL;
@@ -521,8 +515,8 @@ static int main_loop(int argc, const char **argv_) {
   int use_y4m = 1;
   int opt_yv12 = 0;
   int opt_i420 = 0;
-  aom_codec_dec_cfg_t cfg = { 0, 0, 0 };
-#if CONFIG_AOM_HIGHBITDEPTH
+  aom_codec_dec_cfg_t cfg = { 0, 0, 0, CONFIG_LOWBITDEPTH };
+#if CONFIG_HIGHBITDEPTH
   unsigned int output_bit_depth = 0;
 #endif
 #if CONFIG_EXT_TILE
@@ -533,7 +527,7 @@ static int main_loop(int argc, const char **argv_) {
   int dec_flags = 0;
   int do_scale = 0;
   aom_image_t *scaled_img = NULL;
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
   aom_image_t *img_shifted = NULL;
 #endif
   int frame_avail, got_data, flush_decoder = 0;
@@ -621,7 +615,7 @@ static int main_loop(int argc, const char **argv_) {
       num_external_frame_buffers = arg_parse_uint(&arg);
     else if (arg_match(&arg, &continuearg, argi))
       keep_going = 1;
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
     else if (arg_match(&arg, &outbitdeptharg, argi)) {
       output_bit_depth = arg_parse_uint(&arg);
     }
@@ -721,7 +715,6 @@ static int main_loop(int argc, const char **argv_) {
   if (!interface) interface = get_aom_decoder_by_index(0);
 
   dec_flags = (postproc ? AOM_CODEC_USE_POSTPROC : 0) |
-              (ec_enabled ? AOM_CODEC_USE_ERROR_CONCEALMENT : 0) |
               (frame_parallel ? AOM_CODEC_USE_FRAME_THREADING : 0);
   if (aom_codec_dec_init(&decoder, interface->codec_interface(), &cfg,
                          dec_flags)) {
@@ -886,34 +879,38 @@ static int main_loop(int argc, const char **argv_) {
 #endif
         }
       }
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
       // Default to codec bit depth if output bit depth not set
       if (!output_bit_depth && single_file && !do_md5) {
         output_bit_depth = img->bit_depth;
       }
       // Shift up or down if necessary
-      if (output_bit_depth != 0 && output_bit_depth != img->bit_depth) {
+      if (output_bit_depth != 0) {
         const aom_img_fmt_t shifted_fmt =
             output_bit_depth == 8
                 ? img->fmt ^ (img->fmt & AOM_IMG_FMT_HIGHBITDEPTH)
                 : img->fmt | AOM_IMG_FMT_HIGHBITDEPTH;
-        if (img_shifted &&
-            img_shifted_realloc_required(img, img_shifted, shifted_fmt)) {
-          aom_img_free(img_shifted);
-          img_shifted = NULL;
+
+        if (shifted_fmt != img->fmt || output_bit_depth != img->bit_depth) {
+          if (img_shifted &&
+              img_shifted_realloc_required(img, img_shifted, shifted_fmt)) {
+            aom_img_free(img_shifted);
+            img_shifted = NULL;
+          }
+          if (!img_shifted) {
+            img_shifted =
+                aom_img_alloc(NULL, shifted_fmt, img->d_w, img->d_h, 16);
+            img_shifted->bit_depth = output_bit_depth;
+          }
+          if (output_bit_depth > img->bit_depth) {
+            aom_img_upshift(img_shifted, img,
+                            output_bit_depth - img->bit_depth);
+          } else {
+            aom_img_downshift(img_shifted, img,
+                              img->bit_depth - output_bit_depth);
+          }
+          img = img_shifted;
         }
-        if (!img_shifted) {
-          img_shifted =
-              aom_img_alloc(NULL, shifted_fmt, img->d_w, img->d_h, 16);
-          img_shifted->bit_depth = output_bit_depth;
-        }
-        if (output_bit_depth > img->bit_depth) {
-          aom_img_upshift(img_shifted, img, output_bit_depth - img->bit_depth);
-        } else {
-          aom_img_downshift(img_shifted, img,
-                            img->bit_depth - output_bit_depth);
-        }
-        img = img_shifted;
       }
 #endif
 
@@ -1031,7 +1028,7 @@ fail2:
   if (input.aom_input_ctx->file_type != FILE_TYPE_WEBM) free(buf);
 
   if (scaled_img) aom_img_free(scaled_img);
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
   if (img_shifted) aom_img_free(img_shifted);
 #endif
 

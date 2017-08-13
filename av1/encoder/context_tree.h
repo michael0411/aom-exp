@@ -27,14 +27,11 @@ struct ThreadData;
 typedef struct {
   MODE_INFO mic;
   MB_MODE_INFO_EXT mbmi_ext;
-#if CONFIG_PALETTE
   uint8_t *color_index_map[2];
-#endif  // CONFIG_PALETTE
 #if CONFIG_VAR_TX
   uint8_t *blk_skip[MAX_MB_PLANE];
 #endif
 
-  // dual buffer pointers, 0: in use, 1: best in store
   tran_low_t *coeff[MAX_MB_PLANE];
   tran_low_t *qcoeff[MAX_MB_PLANE];
   tran_low_t *dqcoeff[MAX_MB_PLANE];
@@ -42,12 +39,14 @@ typedef struct {
   tran_low_t *pvq_ref_coeff[MAX_MB_PLANE];
 #endif
   uint16_t *eobs[MAX_MB_PLANE];
+#if CONFIG_LV_MAP
+  uint8_t *txb_entropy_ctx[MAX_MB_PLANE];
+#endif
 
   int num_4x4_blk;
   int skip;
-  int pred_pixel_ready;
   // For current partition, only if all Y, U, and V transform blocks'
-  // coefficients are quantized to 0, skippable is set to 0.
+  // coefficients are quantized to 0, skippable is set to 1.
   int skippable;
   int best_mode_index;
   int hybrid_pred_diff;
@@ -80,12 +79,14 @@ typedef struct PC_TREE {
   PICK_MODE_CONTEXT horizontalb[3];
   PICK_MODE_CONTEXT verticala[3];
   PICK_MODE_CONTEXT verticalb[3];
+  PICK_MODE_CONTEXT horizontal4[4];
+  PICK_MODE_CONTEXT vertical4[4];
 #endif
   union {
     struct PC_TREE *split[4];
     PICK_MODE_CONTEXT *leaf_split[4];
   };
-#ifdef CONFIG_SUPERTX
+#if CONFIG_SUPERTX
   PICK_MODE_CONTEXT horizontal_supertx;
   PICK_MODE_CONTEXT vertical_supertx;
   PICK_MODE_CONTEXT split_supertx;

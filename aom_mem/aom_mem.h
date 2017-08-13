@@ -29,7 +29,7 @@ void *aom_malloc(size_t size);
 void *aom_calloc(size_t num, size_t size);
 void aom_free(void *memblk);
 
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 void *aom_memset16(void *dest, int val, size_t length);
 #endif
 
@@ -37,6 +37,25 @@ void *aom_memset16(void *dest, int val, size_t length);
 
 #ifdef AOM_MEM_PLTFRM
 #include AOM_MEM_PLTFRM
+#endif
+
+#if CONFIG_DEBUG
+#define AOM_CHECK_MEM_ERROR(error_info, lval, expr)                         \
+  do {                                                                      \
+    lval = (expr);                                                          \
+    if (!lval)                                                              \
+      aom_internal_error(error_info, AOM_CODEC_MEM_ERROR,                   \
+                         "Failed to allocate " #lval " at %s:%d", __FILE__, \
+                         __LINE__);                                         \
+  } while (0)
+#else
+#define AOM_CHECK_MEM_ERROR(error_info, lval, expr)       \
+  do {                                                    \
+    lval = (expr);                                        \
+    if (!lval)                                            \
+      aom_internal_error(error_info, AOM_CODEC_MEM_ERROR, \
+                         "Failed to allocate " #lval);    \
+  } while (0)
 #endif
 
 #if defined(__cplusplus)

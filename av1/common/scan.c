@@ -14,7 +14,7 @@
 #include "av1/common/common_data.h"
 #include "av1/common/scan.h"
 
-#if CONFIG_CB4X4
+#if CONFIG_CHROMA_2X2
 DECLARE_ALIGNED(16, static const int16_t, default_scan_2x2[4]) = {
   0, 1, 2, 3,
 };
@@ -73,17 +73,17 @@ DECLARE_ALIGNED(16, static const int16_t, mrow_scan_8x4[32]) = {
 };
 
 DECLARE_ALIGNED(16, static const int16_t, default_scan_4x16[64]) = {
-  0,  1,  4,  2,  5,  8,  3,  6,  9,  12, 7,  10, 13, 16, 11, 14,
-  17, 20, 15, 18, 21, 24, 19, 22, 25, 28, 23, 26, 29, 32, 27, 30,
-  33, 36, 31, 34, 37, 40, 35, 38, 41, 44, 39, 42, 45, 48, 43, 46,
-  49, 52, 47, 50, 53, 56, 51, 54, 57, 60, 55, 58, 61, 59, 62, 63,
+  0,  1,  4,  5,  2,  8,  6,  9,  10, 3,  12, 7,  13, 11, 14, 16,
+  17, 15, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+  32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+  48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
 };
 
 DECLARE_ALIGNED(16, static const int16_t, default_scan_16x4[64]) = {
-  0,  1,  16, 2,  17, 32, 3,  18, 33, 48, 4,  19, 34, 49, 5,  20,
-  35, 50, 6,  21, 36, 51, 7,  22, 37, 52, 8,  23, 38, 53, 9,  24,
-  39, 54, 10, 25, 40, 55, 11, 26, 41, 56, 12, 27, 42, 57, 13, 28,
-  43, 58, 14, 29, 44, 59, 15, 30, 45, 60, 31, 46, 61, 47, 62, 63,
+  0,  1,  16, 17, 2,  32, 18, 33, 34, 3,  48, 19, 49, 35, 50, 4,
+  20, 51, 36, 5,  52, 21, 37, 53, 6,  22, 38, 54, 7,  23, 39, 55,
+  8,  24, 40, 56, 9,  25, 41, 57, 10, 26, 42, 58, 11, 27, 43, 59,
+  12, 28, 44, 60, 13, 29, 45, 61, 14, 30, 46, 62, 15, 31, 47, 63,
 };
 
 #if CONFIG_EXT_TX
@@ -1491,7 +1491,7 @@ DECLARE_ALIGNED(16, static const int16_t, default_scan_64x64[4096]) = {
 };
 #endif  // CONFIG_TX64X64
 
-#if CONFIG_CB4X4
+#if CONFIG_CHROMA_2X2
 DECLARE_ALIGNED(16, static const int16_t,
                 default_scan_2x2_neighbors[5 * MAX_NEIGHBORS]) = {
   0, 0, 0, 0, 0, 1, 1, 2, 0, 0,
@@ -1582,36 +1582,36 @@ DECLARE_ALIGNED(16, static const int16_t,
 
 DECLARE_ALIGNED(16, static const int16_t,
                 default_scan_4x16_neighbors[65 * MAX_NEIGHBORS]) = {
-  0,  0,  0,  0,  0,  0,  1,  1,  1,  4,  4,  4,  2,  2,  2,  5,  5,  8,  8,
-  8,  3,  6,  6,  9,  9,  12, 12, 12, 7,  10, 10, 13, 13, 16, 16, 16, 11, 14,
-  14, 17, 17, 20, 20, 20, 15, 18, 18, 21, 21, 24, 24, 24, 19, 22, 22, 25, 25,
-  28, 28, 28, 23, 26, 26, 29, 29, 32, 32, 32, 27, 30, 30, 33, 33, 36, 36, 36,
-  31, 34, 34, 37, 37, 40, 40, 40, 35, 38, 38, 41, 41, 44, 44, 44, 39, 42, 42,
-  45, 45, 48, 48, 48, 43, 46, 46, 49, 49, 52, 52, 52, 47, 50, 50, 53, 53, 56,
-  56, 56, 51, 54, 54, 57, 57, 60, 55, 58, 58, 61, 59, 62, 0,  0
+  0,  0,  0,  0,  0,  0,  1,  4,  1,  1,  4,  4,  2,  5,  5,  8,  6,  9,  2,
+  2,  8,  8,  3,  6,  9,  12, 7,  10, 10, 13, 12, 12, 13, 16, 11, 14, 14, 17,
+  15, 18, 16, 16, 17, 20, 18, 21, 19, 22, 20, 20, 21, 24, 22, 25, 23, 26, 24,
+  24, 25, 28, 26, 29, 27, 30, 28, 28, 29, 32, 30, 33, 31, 34, 32, 32, 33, 36,
+  34, 37, 35, 38, 36, 36, 37, 40, 38, 41, 39, 42, 40, 40, 41, 44, 42, 45, 43,
+  46, 44, 44, 45, 48, 46, 49, 47, 50, 48, 48, 49, 52, 50, 53, 51, 54, 52, 52,
+  53, 56, 54, 57, 55, 58, 56, 56, 57, 60, 58, 61, 59, 62, 0,  0
 };
 
 DECLARE_ALIGNED(16, static const int16_t,
                 default_scan_16x4_neighbors[65 * MAX_NEIGHBORS]) = {
-  0,  0,  0,  0,  0,  0,  1,  1,  1,  16, 16, 16, 2,  2,  2,  17, 17, 32, 32,
-  32, 3,  3,  3,  18, 18, 33, 33, 48, 4,  4,  4,  19, 19, 34, 34, 49, 5,  5,
-  5,  20, 20, 35, 35, 50, 6,  6,  6,  21, 21, 36, 36, 51, 7,  7,  7,  22, 22,
-  37, 37, 52, 8,  8,  8,  23, 23, 38, 38, 53, 9,  9,  9,  24, 24, 39, 39, 54,
-  10, 10, 10, 25, 25, 40, 40, 55, 11, 11, 11, 26, 26, 41, 41, 56, 12, 12, 12,
-  27, 27, 42, 42, 57, 13, 13, 13, 28, 28, 43, 43, 58, 14, 14, 14, 29, 29, 44,
-  44, 59, 15, 30, 30, 45, 45, 60, 31, 46, 46, 61, 47, 62, 0,  0
+  0,  0,  0,  0,  0,  0,  1,  16, 1,  1,  16, 16, 2,  17, 17, 32, 18, 33, 2,
+  2,  32, 32, 3,  18, 33, 48, 19, 34, 34, 49, 3,  3,  4,  19, 35, 50, 20, 35,
+  4,  4,  36, 51, 5,  20, 21, 36, 37, 52, 5,  5,  6,  21, 22, 37, 38, 53, 6,
+  6,  7,  22, 23, 38, 39, 54, 7,  7,  8,  23, 24, 39, 40, 55, 8,  8,  9,  24,
+  25, 40, 41, 56, 9,  9,  10, 25, 26, 41, 42, 57, 10, 10, 11, 26, 27, 42, 43,
+  58, 11, 11, 12, 27, 28, 43, 44, 59, 12, 12, 13, 28, 29, 44, 45, 60, 13, 13,
+  14, 29, 30, 45, 46, 61, 14, 14, 15, 30, 31, 46, 47, 62, 0,  0
 };
 
 #if CONFIG_EXT_TX
 DECLARE_ALIGNED(16, static const int16_t,
                 mrow_scan_4x16_neighbors[65 * MAX_NEIGHBORS]) = {
-  0,  0,  0,  0,  0,  0,  1,  1,  1,  16, 16, 16, 2,  2,  2,  17, 17, 32, 32,
-  32, 3,  3,  3,  18, 18, 33, 33, 48, 4,  4,  4,  19, 19, 34, 34, 49, 5,  5,
-  5,  20, 20, 35, 35, 50, 6,  6,  6,  21, 21, 36, 36, 51, 7,  7,  7,  22, 22,
-  37, 37, 52, 8,  8,  8,  23, 23, 38, 38, 53, 9,  9,  9,  24, 24, 39, 39, 54,
-  10, 10, 10, 25, 25, 40, 40, 55, 11, 11, 11, 26, 26, 41, 41, 56, 12, 12, 12,
-  27, 27, 42, 42, 57, 13, 13, 13, 28, 28, 43, 43, 58, 14, 14, 14, 29, 29, 44,
-  44, 59, 15, 30, 30, 45, 45, 60, 31, 46, 46, 61, 47, 62, 0,  0
+  0,  0,  0,  0,  1,  1,  2,  2,  0,  0,  1,  4,  2,  5,  3,  6,  4,  4,  5,
+  8,  6,  9,  7,  10, 8,  8,  9,  12, 10, 13, 11, 14, 12, 12, 13, 16, 14, 17,
+  15, 18, 16, 16, 17, 20, 18, 21, 19, 22, 20, 20, 21, 24, 22, 25, 23, 26, 24,
+  24, 25, 28, 26, 29, 27, 30, 28, 28, 29, 32, 30, 33, 31, 34, 32, 32, 33, 36,
+  34, 37, 35, 38, 36, 36, 37, 40, 38, 41, 39, 42, 40, 40, 41, 44, 42, 45, 43,
+  46, 44, 44, 45, 48, 46, 49, 47, 50, 48, 48, 49, 52, 50, 53, 51, 54, 52, 52,
+  53, 56, 54, 57, 55, 58, 56, 56, 57, 60, 58, 61, 59, 62, 0,  0
 };
 
 DECLARE_ALIGNED(16, static const int16_t,
@@ -4249,7 +4249,7 @@ DECLARE_ALIGNED(16, static const int16_t,
 };
 #endif  // CONFIG_TX64X64
 
-#if CONFIG_CB4X4
+#if CONFIG_CHROMA_2X2
 DECLARE_ALIGNED(16, static const int16_t, av1_default_iscan_2x2[4]) = { 0, 1, 2,
                                                                         3 };
 #endif
@@ -4307,17 +4307,17 @@ DECLARE_ALIGNED(16, static const int16_t, av1_mrow_iscan_8x4[32]) = {
 };
 
 DECLARE_ALIGNED(16, static const int16_t, av1_default_iscan_4x16[64]) = {
-  0,  1,  3,  6,  2,  4,  7,  10, 5,  8,  11, 14, 9,  12, 15, 18,
-  13, 16, 19, 22, 17, 20, 23, 26, 21, 24, 27, 30, 25, 28, 31, 34,
-  29, 32, 35, 38, 33, 36, 39, 42, 37, 40, 43, 46, 41, 44, 47, 50,
-  45, 48, 51, 54, 49, 52, 55, 58, 53, 56, 59, 61, 57, 60, 62, 63,
+  0,  1,  4,  9,  2,  3,  6,  11, 5,  7,  8,  13, 10, 12, 14, 17,
+  15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+  32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+  48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
 };
 
 DECLARE_ALIGNED(16, static const int16_t, av1_default_iscan_16x4[64]) = {
-  0, 1,  3,  6,  10, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50, 54,
-  2, 4,  7,  11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 55, 58,
-  5, 8,  12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 59, 61,
-  9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 60, 62, 63,
+  0,  1,  4,  9,  15, 19, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60,
+  2,  3,  6,  11, 16, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61,
+  5,  7,  8,  13, 18, 22, 26, 30, 34, 38, 42, 46, 50, 54, 58, 62,
+  10, 12, 14, 17, 20, 23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 63,
 };
 
 #if CONFIG_EXT_TX
@@ -4343,10 +4343,10 @@ DECLARE_ALIGNED(16, static const int16_t, av1_mcol_iscan_4x16[64]) = {
 };
 
 DECLARE_ALIGNED(16, static const int16_t, av1_mcol_iscan_16x4[64]) = {
-  0,  16, 32, 48, 1,  17, 33, 49, 2,  18, 34, 50, 3,  19, 35, 51,
-  4,  20, 36, 52, 5,  21, 37, 53, 6,  22, 38, 54, 7,  23, 39, 55,
-  8,  24, 40, 56, 9,  25, 41, 57, 10, 26, 42, 58, 11, 27, 43, 59,
-  12, 28, 44, 60, 13, 29, 45, 61, 14, 30, 46, 62, 15, 31, 47, 63,
+  0, 4, 8,  12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60,
+  1, 5, 9,  13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61,
+  2, 6, 10, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50, 54, 58, 62,
+  3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 63,
 };
 #endif  // CONFIG_EXT_TX
 
@@ -5719,7 +5719,7 @@ DECLARE_ALIGNED(16, static const int16_t, av1_default_iscan_64x64[4096]) = {
 #endif  // CONFIG_TX64X64
 
 const SCAN_ORDER av1_default_scan_orders[TX_SIZES] = {
-#if CONFIG_CB4X4
+#if CONFIG_CHROMA_2X2
   { default_scan_2x2, av1_default_iscan_2x2, default_scan_2x2_neighbors },
 #endif
   { default_scan_4x4, av1_default_iscan_4x4, default_scan_4x4_neighbors },
@@ -5732,7 +5732,7 @@ const SCAN_ORDER av1_default_scan_orders[TX_SIZES] = {
 };
 
 const SCAN_ORDER av1_intra_scan_orders[TX_SIZES_ALL][TX_TYPES] = {
-#if CONFIG_CB4X4
+#if CONFIG_CHROMA_2X2
   {
       // TX_2X2
       { default_scan_2x2, av1_default_iscan_2x2, default_scan_2x2_neighbors },
@@ -6043,7 +6043,7 @@ const SCAN_ORDER av1_intra_scan_orders[TX_SIZES_ALL][TX_TYPES] = {
 };
 
 const SCAN_ORDER av1_inter_scan_orders[TX_SIZES_ALL][TX_TYPES] = {
-#if CONFIG_CB4X4
+#if CONFIG_CHROMA_2X2
   {
       // TX_2X2
       { default_scan_2x2, av1_default_iscan_2x2, default_scan_2x2_neighbors },
@@ -6493,7 +6493,7 @@ const SCAN_ORDER av1_inter_scan_orders[TX_SIZES_ALL][TX_TYPES] = {
 static uint32_t *get_non_zero_prob(FRAME_CONTEXT *fc, TX_SIZE tx_size,
                                    TX_TYPE tx_type) {
   switch (tx_size) {
-#if CONFIG_CB4X4
+#if CONFIG_CHROMA_2X2
     case TX_2X2: return fc->non_zero_prob_2x2[tx_type];
 #endif
     case TX_4X4: return fc->non_zero_prob_4X4[tx_type];
@@ -6515,7 +6515,7 @@ static uint32_t *get_non_zero_prob(FRAME_CONTEXT *fc, TX_SIZE tx_size,
 static int16_t *get_adapt_scan(FRAME_CONTEXT *fc, TX_SIZE tx_size,
                                TX_TYPE tx_type) {
   switch (tx_size) {
-#if CONFIG_CB4X4
+#if CONFIG_CHROMA_2X2
     case TX_2X2: return fc->scan_2x2[tx_type];
 #endif
     case TX_4X4: return fc->scan_4X4[tx_type];
@@ -6537,7 +6537,7 @@ static int16_t *get_adapt_scan(FRAME_CONTEXT *fc, TX_SIZE tx_size,
 static int16_t *get_adapt_iscan(FRAME_CONTEXT *fc, TX_SIZE tx_size,
                                 TX_TYPE tx_type) {
   switch (tx_size) {
-#if CONFIG_CB4X4
+#if CONFIG_CHROMA_2X2
     case TX_2X2: return fc->iscan_2x2[tx_type];
 #endif
     case TX_4X4: return fc->iscan_4X4[tx_type];
@@ -6559,7 +6559,7 @@ static int16_t *get_adapt_iscan(FRAME_CONTEXT *fc, TX_SIZE tx_size,
 static int16_t *get_adapt_nb(FRAME_CONTEXT *fc, TX_SIZE tx_size,
                              TX_TYPE tx_type) {
   switch (tx_size) {
-#if CONFIG_CB4X4
+#if CONFIG_CHROMA_2X2
     case TX_2X2: return fc->nb_2x2[tx_type];
 #endif
     case TX_4X4: return fc->nb_4X4[tx_type];
@@ -6581,7 +6581,7 @@ static int16_t *get_adapt_nb(FRAME_CONTEXT *fc, TX_SIZE tx_size,
 static uint32_t *get_non_zero_counts(FRAME_COUNTS *counts, TX_SIZE tx_size,
                                      TX_TYPE tx_type) {
   switch (tx_size) {
-#if CONFIG_CB4X4
+#if CONFIG_CHROMA_2X2
     case TX_2X2: return counts->non_zero_count_2x2[tx_type];
 #endif
     case TX_4X4: return counts->non_zero_count_4X4[tx_type];
@@ -6600,9 +6600,13 @@ static uint32_t *get_non_zero_counts(FRAME_COUNTS *counts, TX_SIZE tx_size,
   }
 }
 
+static INLINE int clamp_64(int64_t value, int low, int high) {
+  return value < low ? low : (value > high ? high : (int)value);
+}
+
 static void update_scan_prob(AV1_COMMON *cm, TX_SIZE tx_size, TX_TYPE tx_type,
-                             int rate_16) {
-  FRAME_CONTEXT *pre_fc = &cm->frame_contexts[cm->frame_context_idx];
+                             int rate) {
+  FRAME_CONTEXT *pre_fc = cm->pre_fc;
   uint32_t *prev_non_zero_prob = get_non_zero_prob(pre_fc, tx_size, tx_type);
   uint32_t *non_zero_prob = get_non_zero_prob(cm->fc, tx_size, tx_type);
   uint32_t *non_zero_count = get_non_zero_counts(&cm->counts, tx_size, tx_type);
@@ -6611,11 +6615,18 @@ static void update_scan_prob(AV1_COMMON *cm, TX_SIZE tx_size, TX_TYPE tx_type,
   int i;
   for (i = 0; i < tx2d_size; i++) {
     int64_t curr_prob =
-        block_num == 0 ? 0 : (non_zero_count[i] << 16) / block_num;
+        block_num == 0
+            ? 0
+            : (non_zero_count[i] << ADAPT_SCAN_PROB_PRECISION) / block_num;
     int64_t prev_prob = prev_non_zero_prob[i];
     int64_t pred_prob =
-        (curr_prob * rate_16 + prev_prob * ((1 << 16) - rate_16)) >> 16;
-    non_zero_prob[i] = clamp(pred_prob, 0, UINT16_MAX);
+        (curr_prob * rate +
+         prev_prob * ((1 << ADAPT_SCAN_PROB_PRECISION) - rate)) >>
+        ADAPT_SCAN_PROB_PRECISION;
+    // TODO(angiebird): reduce the bit usage of probabilities and remove
+    // clamp_64()
+    non_zero_prob[i] =
+        clamp_64(pred_prob, 0, (1 << ADAPT_SCAN_PROB_PRECISION) - 1);
   }
 }
 
@@ -6770,6 +6781,34 @@ static void update_scan_order_facade(AV1_COMMON *cm, TX_SIZE tx_size,
   av1_update_neighbors(tx_size, scan, iscan, nb);
 }
 
+static void update_eob_threshold(AV1_COMMON *cm, TX_SIZE tx_size,
+                                 TX_TYPE tx_type) {
+  int i, row, col, row_limit, col_limit, cal_idx = 0;
+  const int tx_width = tx_size_wide[tx_size];
+  const int tx_height = tx_size_high[tx_size];
+
+  row_limit = tx_width >> 1;
+  col_limit = tx_height >> 1;
+
+  if (tx_width >= 8 && tx_height >= 8) {
+    SCAN_ORDER *sc = &cm->fc->sc[tx_size][tx_type];
+    int16_t *threshold = &cm->fc->eob_threshold[tx_size][tx_type][0];
+    const int tx2d_size = tx_size_2d[tx_size];
+
+    while (cal_idx < EOB_THRESHOLD_NUM) {
+      for (i = 0; i < tx2d_size; ++i) {
+        row = sc->scan[i] / tx_height;
+        col = sc->scan[i] % tx_width;
+        if (row >= row_limit || col >= col_limit) break;
+      }
+      row_limit >>= 1;
+      col_limit >>= 1;
+      threshold[cal_idx] = i;
+      cal_idx++;
+    }
+  }
+}
+
 void av1_init_scan_order(AV1_COMMON *cm) {
   TX_SIZE tx_size;
   TX_TYPE tx_type;
@@ -6785,12 +6824,14 @@ void av1_init_scan_order(AV1_COMMON *cm) {
       int i;
       SCAN_ORDER *sc = &cm->fc->sc[tx_size][tx_type];
       for (i = 0; i < tx2d_size; ++i) {
-        non_zero_prob[i] = (1 << 16) / 2;  // init non_zero_prob to 0.5
+        non_zero_prob[i] =
+            (1 << ADAPT_SCAN_PROB_PRECISION) / 2;  // init non_zero_prob to 0.5
       }
       update_scan_order_facade(cm, tx_size, tx_type);
       sc->scan = get_adapt_scan(cm->fc, tx_size, tx_type);
       sc->iscan = get_adapt_iscan(cm->fc, tx_size, tx_type);
       sc->neighbors = get_adapt_nb(cm->fc, tx_size, tx_type);
+      update_eob_threshold(cm, tx_size, tx_type);
     }
   }
 }
@@ -6805,9 +6846,14 @@ void av1_adapt_scan_order(AV1_COMMON *cm) {
 #endif  // CONFIG_RECT_TX && (CONFIG_EXT_TX || CONFIG_VAR_TX)
     TX_TYPE tx_type;
     for (tx_type = DCT_DCT; tx_type < TX_TYPES; ++tx_type) {
-      update_scan_prob(cm, tx_size, tx_type, ADAPT_SCAN_UPDATE_RATE_16);
+      update_scan_prob(cm, tx_size, tx_type, ADAPT_SCAN_UPDATE_RATE);
       update_scan_order_facade(cm, tx_size, tx_type);
+      update_eob_threshold(cm, tx_size, tx_type);
     }
   }
+}
+
+void av1_deliver_eob_threshold(const AV1_COMMON *cm, MACROBLOCKD *xd) {
+  xd->eob_threshold_md = (const EobThresholdMD *)cm->fc->eob_threshold;
 }
 #endif  // CONFIG_ADAPT_SCAN

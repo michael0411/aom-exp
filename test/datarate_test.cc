@@ -21,8 +21,8 @@
 namespace {
 
 class DatarateTestLarge
-    : public ::libaom_test::EncoderTest,
-      public ::libaom_test::CodecTestWith2Params<libaom_test::TestMode, int> {
+    : public ::libaom_test::CodecTestWith2Params<libaom_test::TestMode, int>,
+      public ::libaom_test::EncoderTest {
  public:
   DatarateTestLarge() : EncoderTest(GET_PARAM(0)) {}
 
@@ -249,5 +249,5 @@ TEST_P(DatarateTestLarge, ChangingDropFrameThresh) {
 AV1_INSTANTIATE_TEST_CASE(DatarateTestLarge,
                           ::testing::Values(::libaom_test::kOnePassGood,
                                             ::libaom_test::kRealTime),
-                          ::testing::Range(2, 9, 2));
+                          ::testing::Values(2, 5));
 }  // namespace

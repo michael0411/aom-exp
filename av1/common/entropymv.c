@@ -43,48 +43,57 @@ const aom_tree_index av1_mv_fp_tree[TREE_SIZE(MV_FP_SIZE)] = { -0, 2,  -1,
 
 static const nmv_context default_nmv_context = {
   { 32, 64, 96 },  // joints
-#if CONFIG_EC_MULTISYMBOL
-  { 4096, 11264, 19328, 32768, 0 },  // joint_cdf
-#endif
+  { AOM_ICDF(4096), AOM_ICDF(11264), AOM_ICDF(19328), AOM_ICDF(32768),
+    0 },  // joint_cdf
   { {
         // Vertical component
         128,                                                   // sign
         { 224, 144, 192, 168, 192, 176, 192, 198, 198, 245 },  // class
-#if CONFIG_EC_MULTISYMBOL
-        { 28672, 30976, 31858, 32320, 32551, 32656, 32740, 32757, 32762, 32767,
-          32768, 0 },  // class_cdf
+        { AOM_ICDF(28672), AOM_ICDF(30976), AOM_ICDF(31858), AOM_ICDF(32320),
+          AOM_ICDF(32551), AOM_ICDF(32656), AOM_ICDF(32740), AOM_ICDF(32757),
+          AOM_ICDF(32762), AOM_ICDF(32767), AOM_ICDF(32768), 0 },  // class_cdf
+        { 216 },                                                   // class0
+        { 136, 140, 148, 160, 176, 192, 224, 234, 234, 240 },      // bits
+        { { 128, 128, 64 }, { 96, 112, 64 } },                     // class0_fp
+        { 64, 96, 64 },                                            // fp
+        { { AOM_ICDF(16384), AOM_ICDF(24576), AOM_ICDF(26624), AOM_ICDF(32768),
+            0 },
+          { AOM_ICDF(12288), AOM_ICDF(21248), AOM_ICDF(24128), AOM_ICDF(32768),
+            0 } },  // class0_fp_cdf
+        { AOM_ICDF(8192), AOM_ICDF(17408), AOM_ICDF(21248), AOM_ICDF(32768),
+          0 },  // fp_cdf
+        160,    // class0_hp bit
+        128,    // hp
+#if CONFIG_NEW_MULTISYMBOL
+        { AOM_ICDF(160 * 128), AOM_ICDF(32768), 0 },
+        { AOM_ICDF(128 * 128), AOM_ICDF(32768), 0 },
+        { AOM_ICDF(216 * 128), AOM_ICDF(32768), 0 },
 #endif
-        { 216 },                                               // class0
-        { 136, 140, 148, 160, 176, 192, 224, 234, 234, 240 },  // bits
-        { { 128, 128, 64 }, { 96, 112, 64 } },                 // class0_fp
-        { 64, 96, 64 },                                        // fp
-#if CONFIG_EC_MULTISYMBOL
-        { { 16384, 24576, 26624, 32768, 0 },
-          { 12288, 21248, 24128, 32768, 0 } },  // class0_fp_cdf
-        { 8192, 17408, 21248, 32768, 0 },       // fp_cdf
-#endif
-        160,  // class0_hp bit
-        128,  // hp
     },
     {
         // Horizontal component
         128,                                                   // sign
         { 216, 128, 176, 160, 176, 176, 192, 198, 198, 208 },  // class
-#if CONFIG_EC_MULTISYMBOL
-        { 28672, 30976, 31858, 32320, 32551, 32656, 32740, 32757, 32762, 32767,
-          32768, 0 },  // class_cdf
+        { AOM_ICDF(28672), AOM_ICDF(30976), AOM_ICDF(31858), AOM_ICDF(32320),
+          AOM_ICDF(32551), AOM_ICDF(32656), AOM_ICDF(32740), AOM_ICDF(32757),
+          AOM_ICDF(32762), AOM_ICDF(32767), AOM_ICDF(32768), 0 },  // class_cdf
+        { 208 },                                                   // class0
+        { 136, 140, 148, 160, 176, 192, 224, 234, 234, 240 },      // bits
+        { { 128, 128, 64 }, { 96, 112, 64 } },                     // class0_fp
+        { 64, 96, 64 },                                            // fp
+        { { AOM_ICDF(16384), AOM_ICDF(24576), AOM_ICDF(26624), AOM_ICDF(32768),
+            0 },
+          { AOM_ICDF(12288), AOM_ICDF(21248), AOM_ICDF(24128), AOM_ICDF(32768),
+            0 } },  // class0_fp_cdf
+        { AOM_ICDF(8192), AOM_ICDF(17408), AOM_ICDF(21248), AOM_ICDF(32768),
+          0 },  // fp_cdf
+        160,    // class0_hp bit
+        128,    // hp
+#if CONFIG_NEW_MULTISYMBOL
+        { AOM_ICDF(160 * 128), AOM_ICDF(32768), 0 },
+        { AOM_ICDF(128 * 128), AOM_ICDF(32768), 0 },
+        { AOM_ICDF(216 * 128), AOM_ICDF(32768), 0 },
 #endif
-        { 208 },                                               // class0
-        { 136, 140, 148, 160, 176, 192, 224, 234, 234, 240 },  // bits
-        { { 128, 128, 64 }, { 96, 112, 64 } },                 // class0_fp
-        { 64, 96, 64 },                                        // fp
-#if CONFIG_EC_MULTISYMBOL
-        { { 16384, 24576, 26624, 32768, 0 },
-          { 12288, 21248, 24128, 32768, 0 } },  // class0_fp_cdf
-        { 8192, 17408, 21248, 32768, 0 },       // fp_cdf
-#endif
-        160,  // class0_hp bit
-        128,  // hp
     } },
 };
 
@@ -131,43 +140,6 @@ static const uint8_t log_in_base_2[] = {
   9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 10
 };
 
-#if CONFIG_GLOBAL_MOTION
-#if GLOBAL_TRANS_TYPES == 7  // All models
-const aom_tree_index av1_global_motion_types_tree[TREE_SIZE(
-    GLOBAL_TRANS_TYPES)] = { -IDENTITY,   2,  -TRANSLATION,  4,
-                             -ROTZOOM,    6,  -AFFINE,       8,
-                             -HOMOGRAPHY, 10, -HORTRAPEZOID, -VERTRAPEZOID };
-
-static const aom_prob default_global_motion_types_prob[GLOBAL_TRANS_TYPES - 1] =
-    { 224, 128, 192, 192, 32, 128 };
-
-#elif GLOBAL_TRANS_TYPES == 6  // Do not allow full homography
-const aom_tree_index
-    av1_global_motion_types_tree[TREE_SIZE(GLOBAL_TRANS_TYPES)] = {
-      -IDENTITY,    2, -TRANSLATION, 4, -ROTZOOM, 6, -AFFINE, 8, -HORTRAPEZOID,
-      -VERTRAPEZOID
-    };
-
-static const aom_prob default_global_motion_types_prob[GLOBAL_TRANS_TYPES - 1] =
-    { 224, 128, 192, 192, 128 };
-
-#elif GLOBAL_TRANS_TYPES == 4  // Upto Affine
-const aom_tree_index av1_global_motion_types_tree[TREE_SIZE(
-    GLOBAL_TRANS_TYPES)] = { -IDENTITY, 2, -TRANSLATION, 4, -ROTZOOM, -AFFINE };
-
-static const aom_prob default_global_motion_types_prob[GLOBAL_TRANS_TYPES - 1] =
-    { 224, 128, 240 };
-
-#elif GLOBAL_TRANS_TYPES == 3  // Upto rotation-zoom
-
-const aom_tree_index av1_global_motion_types_tree[TREE_SIZE(
-    GLOBAL_TRANS_TYPES)] = { -IDENTITY, 2, -TRANSLATION, -ROTZOOM };
-
-static const aom_prob default_global_motion_types_prob[GLOBAL_TRANS_TYPES - 1] =
-    { 224, 128 };
-#endif                         // GLOBAL_TRANS_TYPES
-#endif                         // CONFIG_GLOBAL_MOTION
-
 static INLINE int mv_class_base(MV_CLASS_TYPE c) {
   return c ? CLASS0_SIZE << (c + 2) : 0;
 }
@@ -181,7 +153,7 @@ MV_CLASS_TYPE av1_get_mv_class(int z, int *offset) {
 }
 
 static void inc_mv_component(int v, nmv_component_counts *comp_counts, int incr,
-                             int usehp) {
+                             MvSubpelPrecision precision) {
   int s, z, c, o, d, e, f;
   assert(v != 0); /* should not be zero */
   s = v < 0;
@@ -197,44 +169,49 @@ static void inc_mv_component(int v, nmv_component_counts *comp_counts, int incr,
 
   if (c == MV_CLASS_0) {
     comp_counts->class0[d] += incr;
-    comp_counts->class0_fp[d][f] += incr;
-    if (usehp) comp_counts->class0_hp[e] += incr;
+#if CONFIG_INTRABC
+    if (precision > MV_SUBPEL_NONE)
+#endif
+      comp_counts->class0_fp[d][f] += incr;
+    if (precision > MV_SUBPEL_LOW_PRECISION) comp_counts->class0_hp[e] += incr;
   } else {
     int i;
     int b = c + CLASS0_BITS - 1;  // number of bits
     for (i = 0; i < b; ++i) comp_counts->bits[i][((d >> i) & 1)] += incr;
-    comp_counts->fp[f] += incr;
-    if (usehp) comp_counts->hp[e] += incr;
+#if CONFIG_INTRABC
+    if (precision > MV_SUBPEL_NONE)
+#endif
+      comp_counts->fp[f] += incr;
+    if (precision > MV_SUBPEL_LOW_PRECISION) comp_counts->hp[e] += incr;
   }
 }
 
-void av1_inc_mv(const MV *mv, nmv_context_counts *counts, const int usehp) {
+void av1_inc_mv(const MV *mv, nmv_context_counts *counts,
+                MvSubpelPrecision precision) {
   if (counts != NULL) {
     const MV_JOINT_TYPE j = av1_get_mv_joint(mv);
     ++counts->joints[j];
 
     if (mv_joint_vertical(j))
-      inc_mv_component(mv->row, &counts->comps[0], 1, usehp);
+      inc_mv_component(mv->row, &counts->comps[0], 1, precision);
 
     if (mv_joint_horizontal(j))
-      inc_mv_component(mv->col, &counts->comps[1], 1, usehp);
+      inc_mv_component(mv->col, &counts->comps[1], 1, precision);
   }
 }
 
 void av1_adapt_mv_probs(AV1_COMMON *cm, int allow_hp) {
   int i, j;
-#if CONFIG_REF_MV
   int idx;
   for (idx = 0; idx < NMV_CONTEXTS; ++idx) {
-    nmv_context *fc = &cm->fc->nmvc[idx];
-    const nmv_context *pre_fc =
-        &cm->frame_contexts[cm->frame_context_idx].nmvc[idx];
+    nmv_context *nmvc = &cm->fc->nmvc[idx];
+    const nmv_context *pre_nmvc = &cm->pre_fc->nmvc[idx];
     const nmv_context_counts *counts = &cm->counts.mv[idx];
-    aom_tree_merge_probs(av1_mv_joint_tree, pre_fc->joints, counts->joints,
-                         fc->joints);
+    aom_tree_merge_probs(av1_mv_joint_tree, pre_nmvc->joints, counts->joints,
+                         nmvc->joints);
     for (i = 0; i < 2; ++i) {
-      nmv_component *comp = &fc->comps[i];
-      const nmv_component *pre_comp = &pre_fc->comps[i];
+      nmv_component *comp = &nmvc->comps[i];
+      const nmv_component *pre_comp = &pre_nmvc->comps[i];
       const nmv_component_counts *c = &counts->comps[i];
 
       comp->sign = av1_mode_mv_merge_probs(pre_comp->sign, c->sign);
@@ -259,72 +236,15 @@ void av1_adapt_mv_probs(AV1_COMMON *cm, int allow_hp) {
       }
     }
   }
-#else
-  nmv_context *fc = &cm->fc->nmvc;
-  const nmv_context *pre_fc = &cm->frame_contexts[cm->frame_context_idx].nmvc;
-  const nmv_context_counts *counts = &cm->counts.mv;
-
-  aom_tree_merge_probs(av1_mv_joint_tree, pre_fc->joints, counts->joints,
-                       fc->joints);
-
-  for (i = 0; i < 2; ++i) {
-    nmv_component *comp = &fc->comps[i];
-    const nmv_component *pre_comp = &pre_fc->comps[i];
-    const nmv_component_counts *c = &counts->comps[i];
-
-    comp->sign = av1_mode_mv_merge_probs(pre_comp->sign, c->sign);
-    aom_tree_merge_probs(av1_mv_class_tree, pre_comp->classes, c->classes,
-                         comp->classes);
-    aom_tree_merge_probs(av1_mv_class0_tree, pre_comp->class0, c->class0,
-                         comp->class0);
-    for (j = 0; j < MV_OFFSET_BITS; ++j)
-      comp->bits[j] = av1_mode_mv_merge_probs(pre_comp->bits[j], c->bits[j]);
-
-    for (j = 0; j < CLASS0_SIZE; ++j)
-      aom_tree_merge_probs(av1_mv_fp_tree, pre_comp->class0_fp[j],
-                           c->class0_fp[j], comp->class0_fp[j]);
-
-    aom_tree_merge_probs(av1_mv_fp_tree, pre_comp->fp, c->fp, comp->fp);
-
-    if (allow_hp) {
-      comp->class0_hp =
-          av1_mode_mv_merge_probs(pre_comp->class0_hp, c->class0_hp);
-      comp->hp = av1_mode_mv_merge_probs(pre_comp->hp, c->hp);
-    }
-  }
-#endif
 }
-
-#if CONFIG_EC_MULTISYMBOL && !CONFIG_EC_ADAPT
-void av1_set_mv_cdfs(nmv_context *ctx) {
-  int i;
-  int j;
-  av1_tree_to_cdf(av1_mv_joint_tree, ctx->joints, ctx->joint_cdf);
-
-  for (i = 0; i < 2; ++i) {
-    nmv_component *const comp_ctx = &ctx->comps[i];
-    av1_tree_to_cdf(av1_mv_class_tree, comp_ctx->classes, comp_ctx->class_cdf);
-
-    for (j = 0; j < CLASS0_SIZE; ++j) {
-      av1_tree_to_cdf(av1_mv_fp_tree, comp_ctx->class0_fp[j],
-                      comp_ctx->class0_fp_cdf[j]);
-    }
-    av1_tree_to_cdf(av1_mv_fp_tree, comp_ctx->fp, comp_ctx->fp_cdf);
-  }
-}
-#endif
 
 void av1_init_mv_probs(AV1_COMMON *cm) {
-#if CONFIG_REF_MV
   int i;
   for (i = 0; i < NMV_CONTEXTS; ++i) {
     // NB: this sets CDFs too
     cm->fc->nmvc[i] = default_nmv_context;
   }
-#else
-  cm->fc->nmvc = default_nmv_context;
-#endif
-#if CONFIG_GLOBAL_MOTION
-  av1_copy(cm->fc->global_motion_types_prob, default_global_motion_types_prob);
-#endif  // CONFIG_GLOBAL_MOTION
+#if CONFIG_INTRABC
+  cm->fc->ndvc = default_nmv_context;
+#endif  // CONFIG_INTRABC
 }

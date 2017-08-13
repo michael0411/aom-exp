@@ -62,7 +62,7 @@ SIMD_INLINE void v128_store_unaligned(void *p, v128 a) {
 // Some compilers will check this during optimisation, others wont.
 #if defined(__OPTIMIZE__) && __OPTIMIZE__ && !defined(__clang__)
 #if defined(__SSSE3__)
-SIMD_INLINE v128 v128_align(v128 a, v128 b, const unsigned int c) {
+SIMD_INLINE v128 v128_align(v128 a, v128 b, unsigned int c) {
   return c ? _mm_alignr_epi8(a, b, c) : b;
 }
 #else
@@ -108,6 +108,8 @@ SIMD_INLINE v128 v128_sub_16(v128 a, v128 b) { return _mm_sub_epi16(a, b); }
 
 SIMD_INLINE v128 v128_ssub_s16(v128 a, v128 b) { return _mm_subs_epi16(a, b); }
 
+SIMD_INLINE v128 v128_ssub_u16(v128 a, v128 b) { return _mm_subs_epu16(a, b); }
+
 SIMD_INLINE v128 v128_sub_32(v128 a, v128 b) { return _mm_sub_epi32(a, b); }
 
 SIMD_INLINE v128 v128_abs_s16(v128 a) {
@@ -115,6 +117,15 @@ SIMD_INLINE v128 v128_abs_s16(v128 a) {
   return _mm_abs_epi16(a);
 #else
   return _mm_max_epi16(a, _mm_sub_epi16(_mm_setzero_si128(), a));
+#endif
+}
+
+SIMD_INLINE v128 v128_abs_s8(v128 a) {
+#if defined(__SSSE3__)
+  return _mm_abs_epi8(a);
+#else
+  v128 sign = _mm_cmplt_epi8(a, _mm_setzero_si128());
+  return _mm_xor_si128(sign, _mm_add_epi8(a, sign));
 #endif
 }
 
@@ -212,6 +223,18 @@ SIMD_INLINE v128 v128_unpacklo_u8_s16(v128 a) {
 
 SIMD_INLINE v128 v128_unpackhi_u8_s16(v128 a) {
   return _mm_unpackhi_epi8(a, _mm_setzero_si128());
+}
+
+SIMD_INLINE v128 v128_unpack_s8_s16(v64 a) {
+  return _mm_srai_epi16(_mm_unpacklo_epi8(a, a), 8);
+}
+
+SIMD_INLINE v128 v128_unpacklo_s8_s16(v128 a) {
+  return _mm_srai_epi16(_mm_unpacklo_epi8(a, a), 8);
+}
+
+SIMD_INLINE v128 v128_unpackhi_s8_s16(v128 a) {
+  return _mm_srai_epi16(_mm_unpackhi_epi8(a, a), 8);
 }
 
 SIMD_INLINE v128 v128_pack_s32_s16(v128 a, v128 b) {

@@ -17,21 +17,19 @@
 
 #include "generic_code.h"
 
-void aom_cdf_init(uint16_t *cdf, int ncdfs, int nsyms, int val, int first) {
+void aom_cdf_init_q15_1D(uint16_t *cdf, int nsyms, int cdf_size) {
   int i;
-  int j;
-  for (i = 0; i < ncdfs; i++) {
-    for (j = 0; j < nsyms; j++) {
-      cdf[i*nsyms + j] = val*j + first;
-    }
-  }
+  for (i = 0; i < nsyms; i++)
+    cdf[i] = AOM_ICDF((i + 1)*CDF_PROB_TOP/nsyms);
+
+  cdf[cdf_size - 1] = 0;
 }
 
 /** Adapts a Q15 cdf after encoding/decoding a symbol. */
 void aom_cdf_adapt_q15(int val, uint16_t *cdf, int n, int *count, int rate) {
   int i;
   *count = OD_MINI(*count + 1, 1 << rate);
-  OD_ASSERT(cdf[n - 1] == 32768);
+  OD_ASSERT(AOM_ICDF(cdf[n - 1]) == 32768);
   if (*count >= 1 << rate) {
     /* Steady-state adaptation based on a simple IIR with dyadic rate. */
     for (i = 0; i < n; i++) {
@@ -55,7 +53,7 @@ void aom_cdf_adapt_q15(int val, uint16_t *cdf, int n, int *count, int rate) {
          stored in a lookup table indexed by n and rate to avoid the
          arithmetic. */
       tmp = 2 - (1<<rate) + i + (32767 + (1<<rate) - n)*(i >= val);
-      cdf[i] -= (cdf[i] - tmp) >> rate;
+      cdf[i] = AOM_ICDF(AOM_ICDF(cdf[i]) - ((AOM_ICDF(cdf[i]) - tmp) >> rate));
     }
   }
   else {
@@ -67,26 +65,11 @@ void aom_cdf_adapt_q15(int val, uint16_t *cdf, int n, int *count, int rate) {
     for (i = 0; i < n; i++) {
       int tmp;
       tmp = (32768 - n)*(i >= val) + i + 1;
-      cdf[i] -= ((cdf[i] - tmp)*alpha) >> 15;
+      cdf[i] = AOM_ICDF(AOM_ICDF(cdf[i])
+          - (((AOM_ICDF(cdf[i]) - tmp)*alpha) >> 15));
     }
   }
-  OD_ASSERT(cdf[n - 1] == 32768);
-}
-
-/** Initializes the cdfs and freq counts for a model.
- *
- * @param [out] model model being initialized
- */
-void generic_model_init(generic_encoder *model) {
-  int i;
-  int j;
-  model->increment = 64;
-  for (i = 0; i < GENERIC_TABLES; i++) {
-    for (j = 0; j < 16; j++) {
-      /* Do flat initialization equivalent to a single symbol in each bin. */
-      model->cdf[i][j] = (j + 1) * model->increment;
-    }
-  }
+  OD_ASSERT(AOM_ICDF(cdf[n - 1]) == 32768);
 }
 
 /** Takes the base-2 log of E(x) in Q1.
@@ -122,23 +105,7 @@ int log_ex(int ex_q16) {
  * @param [in]     integration integration period of ExQ16 (leaky average over
  * 1<<integration samples)
  */
-void generic_model_update(generic_encoder *model, int *ex_q16, int x, int xs,
- int id, int integration) {
-  int i;
-  int xenc;
-  uint16_t *cdf;
-  cdf = model->cdf[id];
-  /* Renormalize if we cannot add increment */
-  if (cdf[15] + model->increment > 32767) {
-    for (i = 0; i < 16; i++) {
-      /* Second term ensures that the pdf is non-null */
-      cdf[i] = (cdf[i] >> 1) + i + 1;
-    }
-  }
-  /* Update freq count */
-  xenc = OD_MINI(15, xs);
-  /* This can be easily vectorized */
-  for (i = xenc; i < 16; i++) cdf[i] += model->increment;
+void generic_model_update(int *ex_q16, int x, int integration) {
   /* We could have saturated ExQ16 directly, but this is safe and simpler */
   x = OD_MINI(x, 32767);
   OD_IIR_DIADIC(*ex_q16, x << 16, integration);

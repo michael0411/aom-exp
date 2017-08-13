@@ -20,8 +20,8 @@
 namespace {
 
 class BordersTest
-    : public ::libaom_test::EncoderTest,
-      public ::libaom_test::CodecTestWithParam<libaom_test::TestMode> {
+    : public ::libaom_test::CodecTestWithParam<libaom_test::TestMode>,
+      public ::libaom_test::EncoderTest {
  protected:
   BordersTest() : EncoderTest(GET_PARAM(0)) {}
   virtual ~BordersTest() {}
@@ -59,7 +59,7 @@ TEST_P(BordersTest, TestEncodeHighBitrate) {
   cfg_.rc_max_quantizer = 10;
 
   ::libaom_test::I420VideoSource video("hantro_odd.yuv", 208, 144, 30, 1, 0,
-                                       40);
+                                       10);
 
   ASSERT_NO_FATAL_FAILURE(RunLoop(&video));
 }
@@ -75,7 +75,7 @@ TEST_P(BordersTest, TestLowBitrate) {
   cfg_.rc_min_quantizer = 40;
 
   ::libaom_test::I420VideoSource video("hantro_odd.yuv", 208, 144, 30, 1, 0,
-                                       40);
+                                       10);
 
   ASSERT_NO_FATAL_FAILURE(RunLoop(&video));
 }

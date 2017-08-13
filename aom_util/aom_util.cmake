@@ -8,6 +8,9 @@
 ## Media Patent License 1.0 was not distributed with this source code in the
 ## PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 ##
+if (NOT AOM_AOM_UTIL_AOM_UTIL_CMAKE_)
+set(AOM_AOM_UTIL_AOM_UTIL_CMAKE_ 1)
+
 set(AOM_UTIL_SOURCES
     "${AOM_ROOT}/aom_util/aom_thread.c"
     "${AOM_ROOT}/aom_util/aom_thread.h"
@@ -25,5 +28,7 @@ endif ()
 function (setup_aom_util_targets)
   add_library(aom_util OBJECT ${AOM_UTIL_SOURCES})
   set(AOM_LIB_TARGETS ${AOM_LIB_TARGETS} aom_util PARENT_SCOPE)
-  target_sources(aom PUBLIC $<TARGET_OBJECTS:aom_util>)
+  target_sources(aom PRIVATE $<TARGET_OBJECTS:aom_util>)
 endfunction ()
+
+endif ()  # AOM_AOM_UTIL_AOM_UTIL_CMAKE_

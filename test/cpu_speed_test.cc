@@ -21,8 +21,8 @@ namespace {
 const int kMaxPSNR = 100;
 
 class CpuSpeedTest
-    : public ::libaom_test::EncoderTest,
-      public ::libaom_test::CodecTestWith2Params<libaom_test::TestMode, int> {
+    : public ::libaom_test::CodecTestWith2Params<libaom_test::TestMode, int>,
+      public ::libaom_test::EncoderTest {
  protected:
   CpuSpeedTest()
       : EncoderTest(GET_PARAM(0)), encoding_mode_(GET_PARAM(1)),
@@ -94,7 +94,7 @@ void CpuSpeedTest::TestQ0() {
 }
 
 void CpuSpeedTest::TestScreencastQ0() {
-  ::libaom_test::Y4mVideoSource video("screendata.y4m", 0, 10);
+  ::libaom_test::Y4mVideoSource video("screendata.y4m", 0, 3);
   cfg_.g_timebase = video.timebase();
   cfg_.rc_2pass_vbr_minsection_pct = 5;
   cfg_.rc_2pass_vbr_maxsection_pct = 2000;
@@ -109,7 +109,7 @@ void CpuSpeedTest::TestScreencastQ0() {
 }
 
 void CpuSpeedTest::TestTuneScreen() {
-  ::libaom_test::Y4mVideoSource video("screendata.y4m", 0, 10);
+  ::libaom_test::Y4mVideoSource video("screendata.y4m", 0, 3);
   cfg_.g_timebase = video.timebase();
   cfg_.rc_2pass_vbr_minsection_pct = 5;
   cfg_.rc_2pass_vbr_minsection_pct = 2000;

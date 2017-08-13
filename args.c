@@ -120,15 +120,13 @@ void arg_show_usage(FILE *fp, const struct arg_def *const *defs) {
 }
 
 unsigned int arg_parse_uint(const struct arg *arg) {
-  uint32_t rawval;
   char *endptr;
-
-  rawval = strtoul(arg->val, &endptr, 10);
+  const unsigned long rawval = strtoul(arg->val, &endptr, 10);  // NOLINT
 
   if (arg->val[0] != '\0' && endptr[0] == '\0') {
-    if (rawval <= UINT_MAX) return rawval;
+    if (rawval <= UINT_MAX) return (unsigned int)rawval;
 
-    die("Option %s: Value %ld out of range for unsigned int\n", arg->name,
+    die("Option %s: Value %lu out of range for unsigned int\n", arg->name,
         rawval);
   }
 
@@ -137,13 +135,11 @@ unsigned int arg_parse_uint(const struct arg *arg) {
 }
 
 int arg_parse_int(const struct arg *arg) {
-  int32_t rawval;
   char *endptr;
-
-  rawval = strtol(arg->val, &endptr, 10);
+  const long rawval = strtol(arg->val, &endptr, 10);  // NOLINT
 
   if (arg->val[0] != '\0' && endptr[0] == '\0') {
-    if (rawval >= INT_MIN && rawval <= INT_MAX) return rawval;
+    if (rawval >= INT_MIN && rawval <= INT_MAX) return (int)rawval;
 
     die("Option %s: Value %ld out of range for signed int\n", arg->name,
         rawval);
@@ -167,7 +163,7 @@ struct aom_rational arg_parse_rational(const struct arg *arg) {
 
   if (arg->val[0] != '\0' && endptr[0] == '/') {
     if (rawval >= INT_MIN && rawval <= INT_MAX)
-      rat.num = rawval;
+      rat.num = (int)rawval;
     else
       die("Option %s: Value %ld out of range for signed int\n", arg->name,
           rawval);
@@ -179,7 +175,7 @@ struct aom_rational arg_parse_rational(const struct arg *arg) {
 
   if (arg->val[0] != '\0' && endptr[0] == '\0') {
     if (rawval >= INT_MIN && rawval <= INT_MAX)
-      rat.den = rawval;
+      rat.den = (int)rawval;
     else
       die("Option %s: Value %ld out of range for signed int\n", arg->name,
           rawval);
@@ -199,7 +195,7 @@ int arg_parse_enum(const struct arg *arg) {
   if (arg->val[0] != '\0' && endptr[0] == '\0') {
     /* Got a raw value, make sure it's valid */
     for (listptr = arg->def->enums; listptr->name; listptr++)
-      if (listptr->val == rawval) return rawval;
+      if (listptr->val == rawval) return (int)rawval;
   }
 
   /* Next see if it can be parsed as a string */

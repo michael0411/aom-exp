@@ -40,36 +40,11 @@ int aom_decode_cdf_adapt_q15_(aom_reader *r, uint16_t *cdf, int n,
     int ft;
     ft = cdf[n - 1];
     for (i = 0; i < n; i++) {
-      cdf[i] = cdf[i]*32768/ft;
+      cdf[i] = AOM_ICDF(cdf[i]*32768/ft);
     }
   }
   val = aom_read_cdf(r, cdf, n, ACCT_STR_NAME);
   aom_cdf_adapt_q15(val, cdf, n, count, rate);
-  return val;
-}
-
-/** Decodes a value from 0 to N-1 (with N up to 16) based on a cdf and adapts
- * the cdf accordingly.
- *
- * @param [in,out] enc   range encoder
- * @param [in]     cdf   CDF of the variable (Q15)
- * @param [in]     n     number of values possible
- * @param [in]     increment adaptation speed (Q15)
- *
- * @retval decoded variable
- */
-int aom_decode_cdf_adapt_(aom_reader *r, uint16_t *cdf, int n,
- int increment ACCT_STR_PARAM) {
-  int i;
-  int val;
-  val = aom_read_cdf_unscaled(r, cdf, n, ACCT_STR_NAME);
-  if (cdf[n-1] + increment > 32767) {
-    for (i = 0; i < n; i++) {
-      /* Second term ensures that the pdf is non-null */
-      cdf[i] = (cdf[i] >> 1) + i + 1;
-    }
-  }
-  for (i = val; i < n; i++) cdf[i] += increment;
   return val;
 }
 
@@ -86,7 +61,7 @@ int aom_decode_cdf_adapt_(aom_reader *r, uint16_t *cdf, int n,
  *
  * @retval decoded variable x
  */
-int generic_decode_(aom_reader *r, generic_encoder *model, int max,
+int generic_decode_(aom_reader *r, generic_encoder *model,
  int *ex_q16, int integration ACCT_STR_PARAM) {
   int lg_q1;
   int shift;
@@ -95,9 +70,7 @@ int generic_decode_(aom_reader *r, generic_encoder *model, int max,
   int xs;
   int lsb;
   int x;
-  int ms;
   lsb = 0;
-  if (max == 0) return 0;
   lg_q1 = log_ex(*ex_q16);
   /* If expectation is too large, shift x to ensure that
      all we have past xs=15 is the exponentially decaying tail
@@ -106,9 +79,7 @@ int generic_decode_(aom_reader *r, generic_encoder *model, int max,
   /* Choose the cdf to use: we have two per "octave" of ExQ16. */
   id = OD_MINI(GENERIC_TABLES - 1, lg_q1);
   cdf = model->cdf[id];
-  ms = (max + (1 << shift >> 1)) >> shift;
-  if (max == -1) xs = aom_read_cdf_unscaled(r, cdf, 16, ACCT_STR_NAME);
-  else xs = aom_read_cdf_unscaled(r, cdf, OD_MINI(ms + 1, 16), ACCT_STR_NAME);
+  xs = aom_read_symbol_pvq(r, cdf, 16, ACCT_STR_NAME);
   if (xs == 15) {
     int e;
     unsigned decay;
@@ -119,7 +90,7 @@ int generic_decode_(aom_reader *r, generic_encoder *model, int max,
     OD_ASSERT(*ex_q16 < INT_MAX >> 1);
     e = ((2**ex_q16 >> 8) + (1 << shift >> 1)) >> shift;
     decay = OD_MAXI(2, OD_MINI(254, 256*e/(e + 256)));
-    xs += aom_laplace_decode_special(r, decay, (max == -1) ? -1 : ms - 15, ACCT_STR_NAME);
+    xs += aom_laplace_decode_special(r, decay, ACCT_STR_NAME);
   }
   if (shift != 0) {
     int special;
@@ -132,7 +103,7 @@ int generic_decode_(aom_reader *r, generic_encoder *model, int max,
     lsb -= !special << (shift - 1);
   }
   x = (xs << shift) + lsb;
-  generic_model_update(model, ex_q16, x, xs, id, integration);
+  generic_model_update(ex_q16, x, integration);
   OD_LOG((OD_LOG_ENTROPY_CODER, OD_LOG_DEBUG,
    "dec: %d %d %d %d %d %x", *ex_q16, x, shift, id, xs, dec->rng));
   return x;

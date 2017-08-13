@@ -11,9 +11,9 @@
 
 #include <assert.h>
 
-#include "aom_scale/yv12config.h"
 #include "aom_mem/aom_mem.h"
 #include "aom_ports/mem.h"
+#include "aom_scale/yv12config.h"
 
 /****************************************************************************
 *  Exports
@@ -34,8 +34,8 @@ int aom_free_frame_buffer(YV12_BUFFER_CONFIG *ybf) {
       aom_free(ybf->buffer_alloc);
     }
 
-#if CONFIG_AOM_HIGHBITDEPTH && CONFIG_GLOBAL_MOTION
-    if (ybf->y_buffer_8bit) free(ybf->y_buffer_8bit);
+#if CONFIG_HIGHBITDEPTH && CONFIG_GLOBAL_MOTION
+    if (ybf->y_buffer_8bit) aom_free(ybf->y_buffer_8bit);
 #endif
 
     /* buffer_alloc isn't accessed by most functions.  Rather y_buffer,
@@ -51,7 +51,7 @@ int aom_free_frame_buffer(YV12_BUFFER_CONFIG *ybf) {
 
 int aom_realloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
                              int ss_x, int ss_y,
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
                              int use_highbitdepth,
 #endif
                              int border, int byte_alignment,
@@ -72,12 +72,12 @@ int aom_realloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
     const uint64_t uvplane_size =
         (uv_height + 2 * uv_border_h) * (uint64_t)uv_stride + byte_alignment;
 
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
     const uint64_t frame_size =
         (1 + use_highbitdepth) * (yplane_size + 2 * uvplane_size);
 #else
     const uint64_t frame_size = yplane_size + 2 * uvplane_size;
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
 
     uint8_t *buf = NULL;
 
@@ -147,7 +147,7 @@ int aom_realloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
     ybf->subsampling_y = ss_y;
 
     buf = ybf->buffer_alloc;
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
     if (use_highbitdepth) {
       // Store uint16 addresses when using 16bit framebuffers
       buf = CONVERT_TO_BYTEPTR(ybf->buffer_alloc);
@@ -155,7 +155,7 @@ int aom_realloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
     } else {
       ybf->flags = 0;
     }
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
 
     ybf->y_buffer = (uint8_t *)yv12_align_addr(
         buf + (border * y_stride) + border, aom_byte_align);
@@ -167,10 +167,13 @@ int aom_realloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
                                        (uv_border_h * uv_stride) + uv_border_w,
                                    aom_byte_align);
 
-#if CONFIG_AOM_HIGHBITDEPTH && CONFIG_GLOBAL_MOTION
-    if (ybf->y_buffer_8bit) {
-      free(ybf->y_buffer_8bit);
-      ybf->y_buffer_8bit = NULL;
+#if CONFIG_HIGHBITDEPTH && CONFIG_GLOBAL_MOTION
+    if (use_highbitdepth) {
+      if (ybf->y_buffer_8bit) aom_free(ybf->y_buffer_8bit);
+      ybf->y_buffer_8bit = (uint8_t *)aom_memalign(32, (size_t)yplane_size);
+      if (!ybf->y_buffer_8bit) return -1;
+    } else {
+      assert(!ybf->y_buffer_8bit);
     }
 #endif
 
@@ -182,14 +185,14 @@ int aom_realloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
 
 int aom_alloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
                            int ss_x, int ss_y,
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
                            int use_highbitdepth,
 #endif
                            int border, int byte_alignment) {
   if (ybf) {
     aom_free_frame_buffer(ybf);
     return aom_realloc_frame_buffer(ybf, width, height, ss_x, ss_y,
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
                                     use_highbitdepth,
 #endif
                                     border, byte_alignment, NULL, NULL, NULL);

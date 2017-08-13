@@ -25,17 +25,19 @@ using libaom_test::ACMRandom;
 
 namespace {
 typedef void (*IhtFunc)(const tran_low_t *in, uint8_t *out, int stride,
-                        int tx_type);
+                        const TxfmParam *txfm_param);
 using std::tr1::tuple;
 using libaom_test::FhtFunc;
 typedef tuple<FhtFunc, IhtFunc, int, aom_bit_depth_t, int> Ht32x16Param;
 
-void fht32x16_ref(const int16_t *in, tran_low_t *out, int stride, int tx_type) {
-  av1_fht32x16_c(in, out, stride, tx_type);
+void fht32x16_ref(const int16_t *in, tran_low_t *out, int stride,
+                  TxfmParam *txfm_param) {
+  av1_fht32x16_c(in, out, stride, txfm_param);
 }
 
-void iht32x16_ref(const tran_low_t *in, uint8_t *out, int stride, int tx_type) {
-  av1_iht32x16_512_add_c(in, out, stride, tx_type);
+void iht32x16_ref(const tran_low_t *in, uint8_t *out, int stride,
+                  const TxfmParam *txfm_param) {
+  av1_iht32x16_512_add_c(in, out, stride, txfm_param);
 }
 
 class AV1Trans32x16HT : public libaom_test::TransformTestBase,
@@ -46,7 +48,6 @@ class AV1Trans32x16HT : public libaom_test::TransformTestBase,
   virtual void SetUp() {
     fwd_txfm_ = GET_PARAM(0);
     inv_txfm_ = GET_PARAM(1);
-    tx_type_ = GET_PARAM(2);
     pitch_ = 32;
     height_ = 16;
     fwd_txfm_ref = fht32x16_ref;
@@ -54,16 +55,17 @@ class AV1Trans32x16HT : public libaom_test::TransformTestBase,
     bit_depth_ = GET_PARAM(3);
     mask_ = (1 << bit_depth_) - 1;
     num_coeffs_ = GET_PARAM(4);
+    txfm_param_.tx_type = GET_PARAM(2);
   }
   virtual void TearDown() { libaom_test::ClearSystemState(); }
 
  protected:
   void RunFwdTxfm(const int16_t *in, tran_low_t *out, int stride) {
-    fwd_txfm_(in, out, stride, tx_type_);
+    fwd_txfm_(in, out, stride, &txfm_param_);
   }
 
   void RunInvTxfm(const tran_low_t *out, uint8_t *dst, int stride) {
-    inv_txfm_(out, dst, stride, tx_type_);
+    inv_txfm_(out, dst, stride, &txfm_param_);
   }
 
   FhtFunc fwd_txfm_;
@@ -100,7 +102,7 @@ const Ht32x16Param kArrayHt32x16Param_c[] = {
 INSTANTIATE_TEST_CASE_P(C, AV1Trans32x16HT,
                         ::testing::ValuesIn(kArrayHt32x16Param_c));
 
-#if HAVE_SSE2 && !CONFIG_EMULATE_HARDWARE
+#if HAVE_SSE2
 const Ht32x16Param kArrayHt32x16Param_sse2[] = {
   make_tuple(&av1_fht32x16_sse2, &av1_iht32x16_512_add_sse2, 0, AOM_BITS_8,
              512),
@@ -139,6 +141,6 @@ const Ht32x16Param kArrayHt32x16Param_sse2[] = {
 };
 INSTANTIATE_TEST_CASE_P(SSE2, AV1Trans32x16HT,
                         ::testing::ValuesIn(kArrayHt32x16Param_sse2));
-#endif  // HAVE_SSE2 && !CONFIG_EMULATE_HARDWARE
+#endif  // HAVE_SSE2
 
 }  // namespace

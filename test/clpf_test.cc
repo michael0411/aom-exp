@@ -15,8 +15,9 @@
 #include "third_party/googletest/src/googletest/include/gtest/gtest.h"
 
 #include "./aom_config.h"
-#include "./aom_dsp_rtcd.h"
+#include "./av1_rtcd.h"
 #include "aom_ports/aom_timer.h"
+#include "av1/common/cdef_block.h"
 #include "test/acm_random.h"
 #include "test/clear_system_state.h"
 #include "test/register_state_check.h"
@@ -26,16 +27,16 @@ using libaom_test::ACMRandom;
 
 namespace {
 
-typedef void (*clpf_block_t)(const uint8_t *src, uint8_t *dst, int sstride,
-                             int dstride, int x0, int y0, int sizex, int sizey,
+typedef void (*clpf_block_t)(uint8_t *dst, const uint16_t *src, int dstride,
+                             int sstride, int sizex, int sizey,
                              unsigned int strength, unsigned int bitdepth);
 
 typedef std::tr1::tuple<clpf_block_t, clpf_block_t, int, int>
     clpf_block_param_t;
 
-class ClpfBlockTest : public ::testing::TestWithParam<clpf_block_param_t> {
+class CDEFClpfBlockTest : public ::testing::TestWithParam<clpf_block_param_t> {
  public:
-  virtual ~ClpfBlockTest() {}
+  virtual ~CDEFClpfBlockTest() {}
   virtual void SetUp() {
     clpf = GET_PARAM(0);
     ref_clpf = GET_PARAM(1);
@@ -52,21 +53,20 @@ class ClpfBlockTest : public ::testing::TestWithParam<clpf_block_param_t> {
   clpf_block_t ref_clpf;
 };
 
-typedef ClpfBlockTest ClpfSpeedTest;
+typedef CDEFClpfBlockTest CDEFClpfSpeedTest;
 
-#if CONFIG_AOM_HIGHBITDEPTH
-typedef void (*clpf_block_hbd_t)(const uint16_t *src, uint16_t *dst,
-                                 int sstride, int dstride, int x0, int y0,
-                                 int sizex, int sizey, unsigned int strength,
-                                 unsigned int bitdepth);
+#if CONFIG_HIGHBITDEPTH
+typedef void (*clpf_block_hbd_t)(uint16_t *dst, const uint16_t *src,
+                                 int dstride, int sstride, int sizex, int sizey,
+                                 unsigned int strength, unsigned int bitdepth);
 
 typedef std::tr1::tuple<clpf_block_hbd_t, clpf_block_hbd_t, int, int>
     clpf_block_hbd_param_t;
 
-class ClpfBlockHbdTest
+class CDEFClpfBlockHbdTest
     : public ::testing::TestWithParam<clpf_block_hbd_param_t> {
  public:
-  virtual ~ClpfBlockHbdTest() {}
+  virtual ~CDEFClpfBlockHbdTest() {}
   virtual void SetUp() {
     clpf = GET_PARAM(0);
     ref_clpf = GET_PARAM(1);
@@ -83,55 +83,82 @@ class ClpfBlockHbdTest
   clpf_block_hbd_t ref_clpf;
 };
 
-typedef ClpfBlockHbdTest ClpfHbdSpeedTest;
+typedef CDEFClpfBlockHbdTest ClpfHbdSpeedTest;
 #endif
 
 template <typename pixel>
-void test_clpf(int w, int h, int depth, int iterations,
-               void (*clpf)(const pixel *src, pixel *dst, int sstride,
-                            int dstride, int x0, int y0, int sizex, int sizey,
+void test_clpf(int w, int h, unsigned int depth, unsigned int iterations,
+               void (*clpf)(pixel *dst, const uint16_t *src, int dstride,
+                            int sstride, int sizex, int sizey,
                             unsigned int strength, unsigned int bitdepth),
-               void (*ref_clpf)(const pixel *src, pixel *dst, int sstride,
-                                int dstride, int x0, int y0, int sizex,
-                                int sizey, unsigned int strength,
-                                unsigned int bitdepth)) {
+               void (*ref_clpf)(pixel *dst, const uint16_t *src, int dstride,
+                                int sstride, int sizex, int sizey,
+                                unsigned int strength, unsigned int bitdepth)) {
   const int size = 24;
   ACMRandom rnd(ACMRandom::DeterministicSeed());
-  DECLARE_ALIGNED(16, pixel, s[size * size]);
+  DECLARE_ALIGNED(16, uint16_t, s[size * size]);
   DECLARE_ALIGNED(16, pixel, d[size * size]);
   DECLARE_ALIGNED(16, pixel, ref_d[size * size]);
   memset(ref_d, 0, size * size * sizeof(*ref_d));
   memset(d, 0, size * size * sizeof(*d));
 
-  int error = 0, pos = 0, strength = 0, xpos = 0, ypos = 0;
-  int bits, level, count;
+  int error = 0, pos = 0, xpos = 8, ypos = 8;
+  unsigned int strength = 0, bits, level, count, damp = 0, boundary = 0;
+
+  assert(size >= w + 16 && size >= h + 16);
+  assert(depth >= 8);
 
   // Test every combination of:
   // * Input with up to <depth> bits of noise
   // * Noise level around every value from 0 to (1<<depth)-1
-  // * Blocks anywhere in the frame (but not on the edge)
   // * All strengths
+  // * All dampings
+  // * Boundaries
   // If clpf and ref_clpf are the same, we're just testing speed
-  for (count = 0; count < iterations; count++) {
-    for (level = 0; level < (1 << depth) && !error; level++) {
-      for (bits = 1; bits <= depth && !error; bits++) {
-        for (int i = 0; i < size * size; i++)
-          s[i] = clamp((rnd.Rand16() & ((1 << bits) - 1)) + level, 0,
-                       (1 << depth) - 1);
-
-        for (ypos = 2; ypos < size - h - 2 && !error; ypos += h * !error) {
-          for (xpos = 2; xpos < size - w - 2 && !error; xpos += w * !error) {
+  for (boundary = 0; boundary < 16; boundary++) {
+    for (count = 0; count < iterations; count++) {
+      for (level = 0; level < (1U << depth) && !error;
+           level += (1 + 4 * !!boundary) << (depth - 8)) {
+        for (bits = 1; bits <= depth && !error; bits++) {
+          for (damp = 4 + depth - 8; damp < depth - 1 && !error; damp++) {
+            for (int i = 0; i < size * size; i++)
+              s[i] = clamp((rnd.Rand16() & ((1 << bits) - 1)) + level, 0,
+                           (1 << depth) - 1);
+            if (boundary) {
+              if (boundary & 1) {  // Left
+                for (int i = 0; i < size; i++)
+                  for (int j = 0; j < xpos; j++)
+                    s[i * size + j] = CDEF_VERY_LARGE;
+              }
+              if (boundary & 2) {  // Right
+                for (int i = 0; i < size; i++)
+                  for (int j = xpos + w; j < size; j++)
+                    s[i * size + j] = CDEF_VERY_LARGE;
+              }
+              if (boundary & 4) {  // Above
+                for (int i = 0; i < ypos; i++)
+                  for (int j = 0; j < size; j++)
+                    s[i * size + j] = CDEF_VERY_LARGE;
+              }
+              if (boundary & 8) {  // Below
+                for (int i = ypos + h; i < size; i++)
+                  for (int j = 0; j < size; j++)
+                    s[i * size + j] = CDEF_VERY_LARGE;
+              }
+            }
             for (strength = depth - 8; strength < depth - 5 && !error;
                  strength += !error) {
-              ref_clpf(s, ref_d, size, size, xpos, ypos, w, h, 1 << strength,
-                       depth);
+              ref_clpf(ref_d + ypos * size + xpos, s + ypos * size + xpos, size,
+                       size, w, h, 1 << strength, damp);
               if (clpf != ref_clpf)
-                ASM_REGISTER_STATE_CHECK(clpf(s, d, size, size, xpos, ypos, w,
-                                              h, 1 << strength, depth));
-              if (ref_clpf != clpf)
+                ASM_REGISTER_STATE_CHECK(clpf(d + ypos * size + xpos,
+                                              s + ypos * size + xpos, size,
+                                              size, w, h, 1 << strength, damp));
+              if (ref_clpf != clpf) {
                 for (pos = 0; pos < size * size && !error; pos++) {
                   error = ref_d[pos] != d[pos];
                 }
+              }
             }
           }
         }
@@ -141,12 +168,13 @@ void test_clpf(int w, int h, int depth, int iterations,
 
   pos--;
   EXPECT_EQ(0, error)
-      << "Error: ClpfBlockTest, SIMD and C mismatch." << std::endl
+      << "Error: CDEFClpfBlockTest, SIMD and C mismatch." << std::endl
       << "First error at " << pos % size << "," << pos / size << " ("
       << (int16_t)ref_d[pos] << " != " << (int16_t)d[pos] << ") " << std::endl
       << "strength: " << (1 << strength) << std::endl
-      << "xpos: " << xpos << std::endl
-      << "ypos: " << ypos << std::endl
+      << "damping: " << damp << std::endl
+      << "depth: " << depth << std::endl
+      << "boundary: " << boundary << std::endl
       << "w: " << w << std::endl
       << "h: " << h << std::endl
       << "A=" << (pos > 2 * size ? (int16_t)s[pos - 2 * size] : -1) << std::endl
@@ -164,13 +192,12 @@ void test_clpf(int w, int h, int depth, int iterations,
 }
 
 template <typename pixel>
-void test_clpf_speed(int w, int h, int depth, int iterations,
-                     void (*clpf)(const pixel *src, pixel *dst, int sstride,
-                                  int dstride, int x0, int y0, int sizex,
-                                  int sizey, unsigned int strength,
-                                  unsigned int bitdepth),
-                     void (*ref_clpf)(const pixel *src, pixel *dst, int sstride,
-                                      int dstride, int x0, int y0, int sizex,
+void test_clpf_speed(int w, int h, unsigned int depth, unsigned int iterations,
+                     void (*clpf)(pixel *dst, const uint16_t *src, int dstride,
+                                  int sstride, int sizex, int sizey,
+                                  unsigned int strength, unsigned int bitdepth),
+                     void (*ref_clpf)(pixel *dst, const uint16_t *src,
+                                      int dstride, int sstride, int sizex,
                                       int sizey, unsigned int strength,
                                       unsigned int bitdepth)) {
   aom_usec_timer ref_timer;
@@ -192,26 +219,26 @@ void test_clpf_speed(int w, int h, int depth, int iterations,
 #endif
 
   EXPECT_GT(ref_elapsed_time, elapsed_time)
-      << "Error: ClpfSpeedTest, SIMD slower than C." << std::endl
+      << "Error: CDEFClpfSpeedTest, SIMD slower than C." << std::endl
       << "C time: " << ref_elapsed_time << " us" << std::endl
       << "SIMD time: " << elapsed_time << " us" << std::endl;
 }
 
-TEST_P(ClpfBlockTest, TestSIMDNoMismatch) {
+TEST_P(CDEFClpfBlockTest, TestSIMDNoMismatch) {
   test_clpf(sizex, sizey, 8, 1, clpf, ref_clpf);
 }
 
-TEST_P(ClpfSpeedTest, TestSpeed) {
+TEST_P(CDEFClpfSpeedTest, DISABLED_TestSpeed) {
   test_clpf_speed(sizex, sizey, 8, 16, clpf, ref_clpf);
 }
 
-#if CONFIG_AOM_HIGHBITDEPTH
-TEST_P(ClpfBlockHbdTest, TestSIMDNoMismatch) {
+#if CONFIG_HIGHBITDEPTH
+TEST_P(CDEFClpfBlockHbdTest, TestSIMDNoMismatch) {
   test_clpf(sizex, sizey, 12, 1, clpf, ref_clpf);
 }
 
-TEST_P(ClpfHbdSpeedTest, TestSpeed) {
-  test_clpf_speed(sizex, sizey, 12, 1, clpf, ref_clpf);
+TEST_P(ClpfHbdSpeedTest, DISABLED_TestSpeed) {
+  test_clpf_speed(sizex, sizey, 12, 4, clpf, ref_clpf);
 }
 #endif
 
@@ -224,140 +251,187 @@ using std::tr1::make_tuple;
 // Test all supported architectures and block sizes
 #if HAVE_SSE2
 INSTANTIATE_TEST_CASE_P(
-    SSE2, ClpfBlockTest,
-    ::testing::Values(make_tuple(&aom_clpf_block_sse2, &aom_clpf_block_c, 8, 8),
-                      make_tuple(&aom_clpf_block_sse2, &aom_clpf_block_c, 8, 4),
-                      make_tuple(&aom_clpf_block_sse2, &aom_clpf_block_c, 4, 8),
-                      make_tuple(&aom_clpf_block_sse2, &aom_clpf_block_c, 4,
-                                 4)));
+    SSE2, CDEFClpfBlockTest,
+    ::testing::Values(
+        make_tuple(&aom_clpf_block_sse2, &aom_clpf_block_c, 8, 8),
+        make_tuple(&aom_clpf_block_sse2, &aom_clpf_block_c, 8, 4),
+        make_tuple(&aom_clpf_block_sse2, &aom_clpf_block_c, 4, 8),
+        make_tuple(&aom_clpf_block_sse2, &aom_clpf_block_c, 4, 4),
+        make_tuple(&aom_clpf_hblock_sse2, &aom_clpf_hblock_c, 8, 8),
+        make_tuple(&aom_clpf_hblock_sse2, &aom_clpf_hblock_c, 8, 4),
+        make_tuple(&aom_clpf_hblock_sse2, &aom_clpf_hblock_c, 4, 8),
+        make_tuple(&aom_clpf_hblock_sse2, &aom_clpf_hblock_c, 4, 4)));
 #endif
 
 #if HAVE_SSSE3
 INSTANTIATE_TEST_CASE_P(
-    SSSE3, ClpfBlockTest,
+    SSSE3, CDEFClpfBlockTest,
     ::testing::Values(
         make_tuple(&aom_clpf_block_ssse3, &aom_clpf_block_c, 8, 8),
         make_tuple(&aom_clpf_block_ssse3, &aom_clpf_block_c, 8, 4),
         make_tuple(&aom_clpf_block_ssse3, &aom_clpf_block_c, 4, 8),
-        make_tuple(&aom_clpf_block_ssse3, &aom_clpf_block_c, 4, 4)));
+        make_tuple(&aom_clpf_block_ssse3, &aom_clpf_block_c, 4, 4),
+        make_tuple(&aom_clpf_hblock_ssse3, &aom_clpf_hblock_c, 8, 8),
+        make_tuple(&aom_clpf_hblock_ssse3, &aom_clpf_hblock_c, 8, 4),
+        make_tuple(&aom_clpf_hblock_ssse3, &aom_clpf_hblock_c, 4, 8),
+        make_tuple(&aom_clpf_hblock_ssse3, &aom_clpf_hblock_c, 4, 4)));
 #endif
 
 #if HAVE_SSE4_1
 INSTANTIATE_TEST_CASE_P(
-    SSSE4_1, ClpfBlockTest,
+    SSE4_1, CDEFClpfBlockTest,
     ::testing::Values(
         make_tuple(&aom_clpf_block_sse4_1, &aom_clpf_block_c, 8, 8),
         make_tuple(&aom_clpf_block_sse4_1, &aom_clpf_block_c, 8, 4),
         make_tuple(&aom_clpf_block_sse4_1, &aom_clpf_block_c, 4, 8),
-        make_tuple(&aom_clpf_block_sse4_1, &aom_clpf_block_c, 4, 4)));
+        make_tuple(&aom_clpf_block_sse4_1, &aom_clpf_block_c, 4, 4),
+        make_tuple(&aom_clpf_hblock_sse4_1, &aom_clpf_hblock_c, 8, 8),
+        make_tuple(&aom_clpf_hblock_sse4_1, &aom_clpf_hblock_c, 8, 4),
+        make_tuple(&aom_clpf_hblock_sse4_1, &aom_clpf_hblock_c, 4, 8),
+        make_tuple(&aom_clpf_hblock_sse4_1, &aom_clpf_hblock_c, 4, 4)));
 #endif
 
 #if HAVE_NEON
 INSTANTIATE_TEST_CASE_P(
-    NEON, ClpfBlockTest,
-    ::testing::Values(make_tuple(&aom_clpf_block_neon, &aom_clpf_block_c, 8, 8),
-                      make_tuple(&aom_clpf_block_neon, &aom_clpf_block_c, 8, 4),
-                      make_tuple(&aom_clpf_block_neon, &aom_clpf_block_c, 4, 8),
-                      make_tuple(&aom_clpf_block_neon, &aom_clpf_block_c, 4,
-                                 4)));
+    NEON, CDEFClpfBlockTest,
+    ::testing::Values(
+        make_tuple(&aom_clpf_block_neon, &aom_clpf_block_c, 8, 8),
+        make_tuple(&aom_clpf_block_neon, &aom_clpf_block_c, 8, 4),
+        make_tuple(&aom_clpf_block_neon, &aom_clpf_block_c, 4, 8),
+        make_tuple(&aom_clpf_block_neon, &aom_clpf_block_c, 4, 4),
+        make_tuple(&aom_clpf_hblock_neon, &aom_clpf_hblock_c, 8, 8),
+        make_tuple(&aom_clpf_hblock_neon, &aom_clpf_hblock_c, 8, 4),
+        make_tuple(&aom_clpf_hblock_neon, &aom_clpf_hblock_c, 4, 8),
+        make_tuple(&aom_clpf_hblock_neon, &aom_clpf_hblock_c, 4, 4)));
 #endif
 
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 #if HAVE_SSE2
 INSTANTIATE_TEST_CASE_P(
-    SSE2, ClpfBlockHbdTest,
+    SSE2, CDEFClpfBlockHbdTest,
     ::testing::Values(
         make_tuple(&aom_clpf_block_hbd_sse2, &aom_clpf_block_hbd_c, 8, 8),
         make_tuple(&aom_clpf_block_hbd_sse2, &aom_clpf_block_hbd_c, 8, 4),
         make_tuple(&aom_clpf_block_hbd_sse2, &aom_clpf_block_hbd_c, 4, 8),
-        make_tuple(&aom_clpf_block_hbd_sse2, &aom_clpf_block_hbd_c, 4, 4)));
+        make_tuple(&aom_clpf_block_hbd_sse2, &aom_clpf_block_hbd_c, 4, 4),
+        make_tuple(&aom_clpf_hblock_hbd_sse2, &aom_clpf_hblock_hbd_c, 8, 8),
+        make_tuple(&aom_clpf_hblock_hbd_sse2, &aom_clpf_hblock_hbd_c, 8, 4),
+        make_tuple(&aom_clpf_hblock_hbd_sse2, &aom_clpf_hblock_hbd_c, 4, 8),
+        make_tuple(&aom_clpf_hblock_hbd_sse2, &aom_clpf_hblock_hbd_c, 4, 4)));
 #endif
 
 #if HAVE_SSSE3
 INSTANTIATE_TEST_CASE_P(
-    SSSE3, ClpfBlockHbdTest,
+    SSSE3, CDEFClpfBlockHbdTest,
     ::testing::Values(
         make_tuple(&aom_clpf_block_hbd_ssse3, &aom_clpf_block_hbd_c, 8, 8),
         make_tuple(&aom_clpf_block_hbd_ssse3, &aom_clpf_block_hbd_c, 8, 4),
         make_tuple(&aom_clpf_block_hbd_ssse3, &aom_clpf_block_hbd_c, 4, 8),
-        make_tuple(&aom_clpf_block_hbd_ssse3, &aom_clpf_block_hbd_c, 4, 4)));
+        make_tuple(&aom_clpf_block_hbd_ssse3, &aom_clpf_block_hbd_c, 4, 4),
+        make_tuple(&aom_clpf_hblock_hbd_ssse3, &aom_clpf_hblock_hbd_c, 8, 8),
+        make_tuple(&aom_clpf_hblock_hbd_ssse3, &aom_clpf_hblock_hbd_c, 8, 4),
+        make_tuple(&aom_clpf_hblock_hbd_ssse3, &aom_clpf_hblock_hbd_c, 4, 8),
+        make_tuple(&aom_clpf_hblock_hbd_ssse3, &aom_clpf_hblock_hbd_c, 4, 4)));
 #endif
 
 #if HAVE_SSE4_1
 INSTANTIATE_TEST_CASE_P(
-    SSSE4_1, ClpfBlockHbdTest,
+    SSE4_1, CDEFClpfBlockHbdTest,
     ::testing::Values(
         make_tuple(&aom_clpf_block_hbd_sse4_1, &aom_clpf_block_hbd_c, 8, 8),
         make_tuple(&aom_clpf_block_hbd_sse4_1, &aom_clpf_block_hbd_c, 8, 4),
         make_tuple(&aom_clpf_block_hbd_sse4_1, &aom_clpf_block_hbd_c, 4, 8),
-        make_tuple(&aom_clpf_block_hbd_sse4_1, &aom_clpf_block_hbd_c, 4, 4)));
+        make_tuple(&aom_clpf_block_hbd_sse4_1, &aom_clpf_block_hbd_c, 4, 4),
+        make_tuple(&aom_clpf_hblock_hbd_sse4_1, &aom_clpf_hblock_hbd_c, 8, 8),
+        make_tuple(&aom_clpf_hblock_hbd_sse4_1, &aom_clpf_hblock_hbd_c, 8, 4),
+        make_tuple(&aom_clpf_hblock_hbd_sse4_1, &aom_clpf_hblock_hbd_c, 4, 8),
+        make_tuple(&aom_clpf_hblock_hbd_sse4_1, &aom_clpf_hblock_hbd_c, 4, 4)));
 #endif
 
 #if HAVE_NEON
 INSTANTIATE_TEST_CASE_P(
-    NEON, ClpfBlockHbdTest,
+    NEON, CDEFClpfBlockHbdTest,
     ::testing::Values(
         make_tuple(&aom_clpf_block_hbd_neon, &aom_clpf_block_hbd_c, 8, 8),
         make_tuple(&aom_clpf_block_hbd_neon, &aom_clpf_block_hbd_c, 8, 4),
         make_tuple(&aom_clpf_block_hbd_neon, &aom_clpf_block_hbd_c, 4, 8),
-        make_tuple(&aom_clpf_block_hbd_neon, &aom_clpf_block_hbd_c, 4, 4)));
+        make_tuple(&aom_clpf_block_hbd_neon, &aom_clpf_block_hbd_c, 4, 4),
+        make_tuple(&aom_clpf_hblock_hbd_neon, &aom_clpf_hblock_hbd_c, 8, 8),
+        make_tuple(&aom_clpf_hblock_hbd_neon, &aom_clpf_hblock_hbd_c, 8, 4),
+        make_tuple(&aom_clpf_hblock_hbd_neon, &aom_clpf_hblock_hbd_c, 4, 8),
+        make_tuple(&aom_clpf_hblock_hbd_neon, &aom_clpf_hblock_hbd_c, 4, 4)));
 #endif
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
 
 // Test speed for all supported architectures
 #if HAVE_SSE2
-INSTANTIATE_TEST_CASE_P(SSE2, ClpfSpeedTest,
-                        ::testing::Values(make_tuple(&aom_clpf_block_sse2,
-                                                     &aom_clpf_block_c, 8, 8)));
+INSTANTIATE_TEST_CASE_P(
+    SSE2, CDEFClpfSpeedTest,
+    ::testing::Values(make_tuple(&aom_clpf_block_sse2, &aom_clpf_block_c, 8, 8),
+                      make_tuple(&aom_clpf_hblock_sse2, &aom_clpf_hblock_c, 8,
+                                 8)));
 #endif
 
 #if HAVE_SSSE3
-INSTANTIATE_TEST_CASE_P(SSSE3, ClpfSpeedTest,
+INSTANTIATE_TEST_CASE_P(SSSE3, CDEFClpfSpeedTest,
                         ::testing::Values(make_tuple(&aom_clpf_block_ssse3,
-                                                     &aom_clpf_block_c, 8, 8)));
+                                                     &aom_clpf_block_c, 8, 8),
+                                          make_tuple(&aom_clpf_hblock_ssse3,
+                                                     &aom_clpf_hblock_c, 8,
+                                                     8)));
 #endif
 
 #if HAVE_SSE4_1
-INSTANTIATE_TEST_CASE_P(SSSE4_1, ClpfSpeedTest,
-                        ::testing::Values(make_tuple(&aom_clpf_block_ssse3,
-                                                     &aom_clpf_block_c, 8, 8)));
+INSTANTIATE_TEST_CASE_P(SSE4_1, CDEFClpfSpeedTest,
+                        ::testing::Values(make_tuple(&aom_clpf_block_sse4_1,
+                                                     &aom_clpf_block_c, 8, 8),
+                                          make_tuple(&aom_clpf_hblock_sse4_1,
+                                                     &aom_clpf_hblock_c, 8,
+                                                     8)));
+
 #endif
 
 #if HAVE_NEON
-INSTANTIATE_TEST_CASE_P(NEON, ClpfSpeedTest,
-                        ::testing::Values(make_tuple(&aom_clpf_block_neon,
-                                                     &aom_clpf_block_c, 8, 8)));
+INSTANTIATE_TEST_CASE_P(
+    NEON, CDEFClpfSpeedTest,
+    ::testing::Values(make_tuple(&aom_clpf_block_neon, &aom_clpf_block_c, 8, 8),
+                      make_tuple(&aom_clpf_hblock_neon, &aom_clpf_hblock_c, 8,
+                                 8)));
 #endif
 
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 #if HAVE_SSE2
-INSTANTIATE_TEST_CASE_P(SSE2, ClpfHbdSpeedTest,
-                        ::testing::Values(make_tuple(&aom_clpf_block_hbd_sse2,
-                                                     &aom_clpf_block_hbd_c, 8,
-                                                     8)));
+INSTANTIATE_TEST_CASE_P(
+    SSE2, ClpfHbdSpeedTest,
+    ::testing::Values(
+        make_tuple(&aom_clpf_block_hbd_sse2, &aom_clpf_block_hbd_c, 8, 8),
+        make_tuple(&aom_clpf_hblock_hbd_sse2, &aom_clpf_hblock_hbd_c, 8, 8)));
 #endif
 
 #if HAVE_SSSE3
-INSTANTIATE_TEST_CASE_P(SSSE3, ClpfHbdSpeedTest,
-                        ::testing::Values(make_tuple(&aom_clpf_block_hbd_ssse3,
-                                                     &aom_clpf_block_hbd_c, 8,
-                                                     8)));
+INSTANTIATE_TEST_CASE_P(
+    SSSE3, ClpfHbdSpeedTest,
+    ::testing::Values(
+        make_tuple(&aom_clpf_block_hbd_ssse3, &aom_clpf_block_hbd_c, 8, 8),
+        make_tuple(&aom_clpf_hblock_hbd_ssse3, &aom_clpf_hblock_hbd_c, 8, 8)));
 #endif
 
 #if HAVE_SSE4_1
-INSTANTIATE_TEST_CASE_P(SSSE4_1, ClpfHbdSpeedTest,
-                        ::testing::Values(make_tuple(&aom_clpf_block_hbd_ssse3,
-                                                     &aom_clpf_block_hbd_c, 8,
-                                                     8)));
+INSTANTIATE_TEST_CASE_P(
+    SSE4_1, ClpfHbdSpeedTest,
+    ::testing::Values(
+        make_tuple(&aom_clpf_block_hbd_sse4_1, &aom_clpf_block_hbd_c, 8, 8),
+        make_tuple(&aom_clpf_hblock_hbd_sse4_1, &aom_clpf_hblock_hbd_c, 8, 8)));
 #endif
 
 #if HAVE_NEON
-INSTANTIATE_TEST_CASE_P(NEON, ClpfHbdSpeedTest,
-                        ::testing::Values(make_tuple(&aom_clpf_block_hbd_neon,
-                                                     &aom_clpf_block_hbd_c, 8,
-                                                     8)));
+INSTANTIATE_TEST_CASE_P(
+    NEON, ClpfHbdSpeedTest,
+    ::testing::Values(
+        make_tuple(&aom_clpf_block_hbd_neon, &aom_clpf_block_hbd_c, 8, 8),
+        make_tuple(&aom_clpf_hblock_hbd_neon, &aom_clpf_hblock_hbd_c, 8, 8)));
 #endif
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
 #endif  // defined(_WIN64) || !defined(_MSC_VER)
 
 }  // namespace

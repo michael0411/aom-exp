@@ -129,12 +129,11 @@ static void count_segs(const AV1_COMMON *cm, MACROBLOCKD *xd,
   xd->mi = mi;
   segment_id = xd->mi[0]->mbmi.segment_id;
 
+  set_mi_row_col(xd, tile, mi_row, bh, mi_col, bw,
 #if CONFIG_DEPENDENT_HORZTILES
-  set_mi_row_col(xd, tile, mi_row, bh, mi_col, bw, cm->mi_rows, cm->mi_cols,
-                 cm->dependent_horz_tiles);
-#else
-  set_mi_row_col(xd, tile, mi_row, bh, mi_col, bw, cm->mi_rows, cm->mi_cols);
-#endif
+                 cm->dependent_horz_tiles,
+#endif  // CONFIG_DEPENDENT_HORZTILES
+                 cm->mi_rows, cm->mi_cols);
 
   // Count the number of hits on each segment with no prediction
   no_pred_segcounts[segment_id]++;
@@ -300,12 +299,8 @@ void av1_choose_segmap_coding_method(AV1_COMMON *cm, MACROBLOCKD *xd) {
   int no_pred_cost;
   int t_pred_cost = INT_MAX;
 
-  int i, tile_col, tile_row, mi_row, mi_col;
-#if CONFIG_TILE_GROUPS
+  int tile_col, tile_row, mi_row, mi_col;
   const int probwt = cm->num_tg;
-#else
-  const int probwt = 1;
-#endif
 
   unsigned(*temporal_predictor_count)[2] = cm->counts.seg.pred;
   unsigned *no_pred_segcounts = cm->counts.seg.tree_total;
@@ -313,7 +308,9 @@ void av1_choose_segmap_coding_method(AV1_COMMON *cm, MACROBLOCKD *xd) {
 
   aom_prob no_pred_tree[SEG_TREE_PROBS];
   aom_prob t_pred_tree[SEG_TREE_PROBS];
+#if !CONFIG_NEW_MULTISYMBOL
   aom_prob t_nopred_prob[PREDICTION_PROBS];
+#endif
 
   (void)xd;
 
@@ -328,7 +325,7 @@ void av1_choose_segmap_coding_method(AV1_COMMON *cm, MACROBLOCKD *xd) {
     for (tile_col = 0; tile_col < cm->tile_cols; tile_col++) {
       MODE_INFO **mi_ptr;
       av1_tile_set_col(&tile_info, cm, tile_col);
-#if CONFIG_TILE_GROUPS && CONFIG_DEPENDENT_HORZTILES
+#if CONFIG_DEPENDENT_HORZTILES
       av1_tile_set_tg_boundary(&tile_info, cm, tile_row, tile_col);
 #endif
       mi_ptr = cm->mi_grid_visible + tile_info.mi_row_start * cm->mi_stride +
@@ -358,8 +355,9 @@ void av1_choose_segmap_coding_method(AV1_COMMON *cm, MACROBLOCKD *xd) {
     calc_segtree_probs(t_unpred_seg_counts, t_pred_tree, segp->tree_probs,
                        probwt);
     t_pred_cost = cost_segmap(t_unpred_seg_counts, t_pred_tree);
-
+#if !CONFIG_NEW_MULTISYMBOL
     // Add in the cost of the signaling for each prediction context.
+    int i;
     for (i = 0; i < PREDICTION_PROBS; i++) {
       const int count0 = temporal_predictor_count[i][0];
       const int count1 = temporal_predictor_count[i][1];
@@ -373,6 +371,7 @@ void av1_choose_segmap_coding_method(AV1_COMMON *cm, MACROBLOCKD *xd) {
       t_pred_cost += count0 * av1_cost_zero(t_nopred_prob[i]) +
                      count1 * av1_cost_one(t_nopred_prob[i]);
     }
+#endif
   }
 
   // Now choose which coding method to use.

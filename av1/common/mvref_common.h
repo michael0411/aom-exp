@@ -18,11 +18,7 @@
 extern "C" {
 #endif
 
-#if CONFIG_REF_MV
 #define MVREF_NEIGHBOURS 9
-#else
-#define MVREF_NEIGHBOURS 8
-#endif
 
 typedef struct position {
   int row;
@@ -45,7 +41,7 @@ typedef enum {
 // adding 9 for each intra block, 3 for each zero mv and 1 for each new
 // motion vector. This single number is then converted into a context
 // with a single lookup ( counter_to_context ).
-static const int mode_2_counter[MB_MODE_COUNT] = {
+static const int mode_2_counter[] = {
   9,  // DC_PRED
   9,  // V_PRED
   9,  // H_PRED
@@ -56,7 +52,11 @@ static const int mode_2_counter[MB_MODE_COUNT] = {
   9,  // D207_PRED
   9,  // D63_PRED
 #if CONFIG_ALT_INTRA
-  9,    // SMOOTH_PRED
+  9,  // SMOOTH_PRED
+#if CONFIG_SMOOTH_HV
+  9,    // SMOOTH_V_PRED
+  9,    // SMOOTH_H_PRED
+#endif  // CONFIG_SMOOTH_HV
 #endif  // CONFIG_ALT_INTRA
   9,    // TM_PRED
   0,    // NEARESTMV
@@ -64,10 +64,14 @@ static const int mode_2_counter[MB_MODE_COUNT] = {
   3,    // ZEROMV
   1,    // NEWMV
 #if CONFIG_EXT_INTER
-  1,    // NEWFROMNEARMV
+#if CONFIG_COMPOUND_SINGLEREF
+  0,    // SR_NEAREST_NEARMV
+        //  1,    // SR_NEAREST_NEWMV
+  1,    // SR_NEAR_NEWMV
+  3,    // SR_ZERO_NEWMV
+  1,    // SR_NEW_NEWMV
+#endif  // CONFIG_COMPOUND_SINGLEREF
   0,    // NEAREST_NEARESTMV
-  0,    // NEAREST_NEARMV
-  0,    // NEAR_NEARESTMV
   0,    // NEAR_NEARMV
   1,    // NEAREST_NEWMV
   1,    // NEW_NEARESTMV
@@ -103,158 +107,6 @@ static const int counter_to_context[19] = {
   BOTH_INTRA             // 18
 };
 
-#if !CONFIG_REF_MV
-static const POSITION mv_ref_blocks[BLOCK_SIZES][MVREF_NEIGHBOURS] = {
-  // 4X4
-  { { -1, 0 },
-    { 0, -1 },
-    { -1, -1 },
-    { -2, 0 },
-    { 0, -2 },
-    { -2, -1 },
-    { -1, -2 },
-    { -2, -2 } },
-  // 4X8
-  { { -1, 0 },
-    { 0, -1 },
-    { -1, -1 },
-    { -2, 0 },
-    { 0, -2 },
-    { -2, -1 },
-    { -1, -2 },
-    { -2, -2 } },
-  // 8X4
-  { { -1, 0 },
-    { 0, -1 },
-    { -1, -1 },
-    { -2, 0 },
-    { 0, -2 },
-    { -2, -1 },
-    { -1, -2 },
-    { -2, -2 } },
-  // 8X8
-  { { -1, 0 },
-    { 0, -1 },
-    { -1, -1 },
-    { -2, 0 },
-    { 0, -2 },
-    { -2, -1 },
-    { -1, -2 },
-    { -2, -2 } },
-  // 8X16
-  { { 0, -1 },
-    { -1, 0 },
-    { 1, -1 },
-    { -1, -1 },
-    { 0, -2 },
-    { -2, 0 },
-    { -2, -1 },
-    { -1, -2 } },
-  // 16X8
-  { { -1, 0 },
-    { 0, -1 },
-    { -1, 1 },
-    { -1, -1 },
-    { -2, 0 },
-    { 0, -2 },
-    { -1, -2 },
-    { -2, -1 } },
-  // 16X16
-  { { -1, 0 },
-    { 0, -1 },
-    { -1, 1 },
-    { 1, -1 },
-    { -1, -1 },
-    { -3, 0 },
-    { 0, -3 },
-    { -3, -3 } },
-  // 16X32
-  { { 0, -1 },
-    { -1, 0 },
-    { 2, -1 },
-    { -1, -1 },
-    { -1, 1 },
-    { 0, -3 },
-    { -3, 0 },
-    { -3, -3 } },
-  // 32X16
-  { { -1, 0 },
-    { 0, -1 },
-    { -1, 2 },
-    { -1, -1 },
-    { 1, -1 },
-    { -3, 0 },
-    { 0, -3 },
-    { -3, -3 } },
-  // 32X32
-  { { -1, 1 },
-    { 1, -1 },
-    { -1, 2 },
-    { 2, -1 },
-    { -1, -1 },
-    { -3, 0 },
-    { 0, -3 },
-    { -3, -3 } },
-  // 32X64
-  { { 0, -1 },
-    { -1, 0 },
-    { 4, -1 },
-    { -1, 2 },
-    { -1, -1 },
-    { 0, -3 },
-    { -3, 0 },
-    { 2, -1 } },
-  // 64X32
-  { { -1, 0 },
-    { 0, -1 },
-    { -1, 4 },
-    { 2, -1 },
-    { -1, -1 },
-    { -3, 0 },
-    { 0, -3 },
-    { -1, 2 } },
-  // 64X64
-  { { -1, 3 },
-    { 3, -1 },
-    { -1, 4 },
-    { 4, -1 },
-    { -1, -1 },
-    { -1, 0 },
-    { 0, -1 },
-    { -1, 6 } },
-#if CONFIG_EXT_PARTITION
-  // TODO(debargha/jingning) Making them twice the 32x64, .. ones above
-  // 64x128
-  { { 0, -2 },
-    { -2, 0 },
-    { 8, -2 },
-    { -2, 4 },
-    { -2, -2 },
-    { 0, -6 },
-    { -6, 0 },
-    { 4, -2 } },
-  // 128x64
-  { { -2, 0 },
-    { 0, -2 },
-    { -2, 8 },
-    { 4, -2 },
-    { -2, -2 },
-    { -6, 0 },
-    { 0, -6 },
-    { -2, 4 } },
-  // 128x128
-  { { -2, 6 },
-    { 6, -2 },
-    { -2, 8 },
-    { 8, -2 },
-    { -2, -2 },
-    { -2, 0 },
-    { 0, -2 },
-    { -2, 12 } },
-#endif  // CONFIG_EXT_PARTITION
-};
-#endif
-
 static const int idx_n_column_to_subblock[4][2] = {
   { 1, 2 }, { 1, 3 }, { 3, 2 }, { 3, 3 }
 };
@@ -277,20 +129,11 @@ static INLINE void clamp_mv_ref(MV *mv, int bw, int bh, const MACROBLOCKD *xd) {
 // on whether the block_size < 8x8 and we have check_sub_blocks set.
 static INLINE int_mv get_sub_block_mv(const MODE_INFO *candidate, int which_mv,
                                       int search_col, int block_idx) {
-#if CONFIG_REF_MV
   (void)search_col;
   (void)block_idx;
   return candidate->mbmi.mv[which_mv];
-#else
-  return block_idx >= 0 && candidate->mbmi.sb_type < BLOCK_8X8
-             ? candidate
-                   ->bmi[idx_n_column_to_subblock[block_idx][search_col == 0]]
-                   .as_mv[which_mv]
-             : candidate->mbmi.mv[which_mv];
-#endif
 }
 
-#if CONFIG_REF_MV
 static INLINE int_mv get_sub_block_pred_mv(const MODE_INFO *candidate,
                                            int which_mv, int search_col,
                                            int block_idx) {
@@ -298,7 +141,6 @@ static INLINE int_mv get_sub_block_pred_mv(const MODE_INFO *candidate,
   (void)block_idx;
   return candidate->mbmi.mv[which_mv];
 }
-#endif
 
 // Performs mv sign inversion if indicated by the reference frame combination.
 static INLINE int_mv scale_mv(const MB_MODE_INFO *mbmi, int ref,
@@ -354,11 +196,7 @@ static INLINE int is_inside(const TileInfo *const tile, int mi_col, int mi_row,
   const int dependent_horz_tile_flag = 0;
   (void)cm;
 #endif
-#if CONFIG_TILE_GROUPS
   if (dependent_horz_tile_flag && !tile->tg_horz_boundary) {
-#else
-  if (dependent_horz_tile_flag) {
-#endif
     return !(mi_row + mi_pos->row < 0 ||
              mi_col + mi_pos->col < tile->mi_col_start ||
              mi_row + mi_pos->row >= mi_rows ||
@@ -378,7 +216,6 @@ static INLINE void lower_mv_precision(MV *mv, int allow_hp) {
   }
 }
 
-#if CONFIG_REF_MV
 static INLINE uint8_t av1_get_pred_diff_ctx(const int_mv pred_mv,
                                             const int_mv this_mv) {
   if (abs(this_mv.as_mv.row - pred_mv.as_mv.row) <= 4 &&
@@ -397,10 +234,41 @@ static INLINE int av1_nmv_ctx(const uint8_t ref_mv_count,
   return 0;
 }
 
+#if CONFIG_EXT_COMP_REFS
+static INLINE int8_t av1_uni_comp_ref_idx(const MV_REFERENCE_FRAME *const rf) {
+  // Single ref pred
+  if (rf[1] <= INTRA_FRAME) return -1;
+
+  // Bi-directional comp ref pred
+  if ((rf[0] < BWDREF_FRAME) && (rf[1] >= BWDREF_FRAME)) return -1;
+
+  for (int8_t ref_idx = 0; ref_idx < UNIDIR_COMP_REFS; ++ref_idx) {
+    if (rf[0] == comp_ref0(ref_idx) && rf[1] == comp_ref1(ref_idx))
+      return ref_idx;
+  }
+  return -1;
+}
+#endif  // CONFIG_EXT_COMP_REFS
+
 static INLINE int8_t av1_ref_frame_type(const MV_REFERENCE_FRAME *const rf) {
   if (rf[1] > INTRA_FRAME) {
-    return TOTAL_REFS_PER_FRAME + FWD_RF_OFFSET(rf[0]) +
-           BWD_RF_OFFSET(rf[1]) * FWD_REFS;
+#if CONFIG_EXT_COMP_REFS
+    int8_t uni_comp_ref_idx = av1_uni_comp_ref_idx(rf);
+#if !USE_UNI_COMP_REFS
+    // NOTE: uni-directional comp refs disabled
+    assert(uni_comp_ref_idx < 0);
+#endif  // !USE_UNI_COMP_REFS
+    if (uni_comp_ref_idx >= 0) {
+      assert((TOTAL_REFS_PER_FRAME + FWD_REFS * BWD_REFS + uni_comp_ref_idx) <
+             MODE_CTX_REF_FRAMES);
+      return TOTAL_REFS_PER_FRAME + FWD_REFS * BWD_REFS + uni_comp_ref_idx;
+    } else {
+#endif  // CONFIG_EXT_COMP_REFS
+      return TOTAL_REFS_PER_FRAME + FWD_RF_OFFSET(rf[0]) +
+             BWD_RF_OFFSET(rf[1]) * FWD_REFS;
+#if CONFIG_EXT_COMP_REFS
+    }
+#endif  // CONFIG_EXT_COMP_REFS
   }
 
   return rf[0];
@@ -412,11 +280,24 @@ static MV_REFERENCE_FRAME ref_frame_map[COMP_REFS][2] = {
   { LAST_FRAME, BWDREF_FRAME },  { LAST2_FRAME, BWDREF_FRAME },
   { LAST3_FRAME, BWDREF_FRAME }, { GOLDEN_FRAME, BWDREF_FRAME },
 
+#if CONFIG_ALTREF2
+  { LAST_FRAME, ALTREF2_FRAME },  { LAST2_FRAME, ALTREF2_FRAME },
+  { LAST3_FRAME, ALTREF2_FRAME }, { GOLDEN_FRAME, ALTREF2_FRAME },
+#endif  // CONFIG_ALTREF2
+
   { LAST_FRAME, ALTREF_FRAME },  { LAST2_FRAME, ALTREF_FRAME },
   { LAST3_FRAME, ALTREF_FRAME }, { GOLDEN_FRAME, ALTREF_FRAME }
-#else
+
+  // TODO(zoeliu): Temporarily disable uni-directional comp refs
+#if CONFIG_EXT_COMP_REFS
+  , { LAST_FRAME, LAST2_FRAME }, { LAST_FRAME, LAST3_FRAME },
+  { LAST_FRAME, GOLDEN_FRAME }, { BWDREF_FRAME, ALTREF_FRAME }
+  // TODO(zoeliu): When ALTREF2 is enabled, we may add:
+  //               {BWDREF_FRAME, ALTREF2_FRAME}
+#endif  // CONFIG_EXT_COMP_REFS
+#else  // !CONFIG_EXT_REFS
   { LAST_FRAME, ALTREF_FRAME }, { GOLDEN_FRAME, ALTREF_FRAME }
-#endif
+#endif  // CONFIG_EXT_REFS
 };
 // clang-format on
 
@@ -428,8 +309,12 @@ static INLINE void av1_set_ref_frame(MV_REFERENCE_FRAME *rf,
   } else {
     rf[0] = ref_frame_type;
     rf[1] = NONE_FRAME;
-    assert(ref_frame_type > INTRA_FRAME &&
-           ref_frame_type < TOTAL_REFS_PER_FRAME);
+#if CONFIG_INTRABC
+    assert(ref_frame_type > NONE_FRAME);
+#else
+    assert(ref_frame_type > INTRA_FRAME);
+#endif
+    assert(ref_frame_type < TOTAL_REFS_PER_FRAME);
   }
 }
 
@@ -471,17 +356,14 @@ static INLINE uint8_t av1_drl_ctx(const CANDIDATE_MV *ref_mv_stack,
 
   return 0;
 }
-#endif
 
 typedef void (*find_mv_refs_sync)(void *const data, int mi_row);
 void av1_find_mv_refs(const AV1_COMMON *cm, const MACROBLOCKD *xd,
                       MODE_INFO *mi, MV_REFERENCE_FRAME ref_frame,
-#if CONFIG_REF_MV
                       uint8_t *ref_mv_count, CANDIDATE_MV *ref_mv_stack,
 #if CONFIG_EXT_INTER
                       int16_t *compound_mode_context,
 #endif  // CONFIG_EXT_INTER
-#endif
                       int_mv *mv_ref_list, int mi_row, int mi_col,
                       find_mv_refs_sync sync, void *const data,
                       int16_t *mode_context);
@@ -494,10 +376,8 @@ void av1_find_best_ref_mvs(int allow_hp, int_mv *mvlist, int_mv *nearest_mv,
 
 void av1_append_sub8x8_mvs_for_idx(const AV1_COMMON *cm, MACROBLOCKD *xd,
                                    int block, int ref, int mi_row, int mi_col,
-#if CONFIG_REF_MV
                                    CANDIDATE_MV *ref_mv_stack,
                                    uint8_t *ref_mv_count,
-#endif
 #if CONFIG_EXT_INTER
                                    int_mv *mv_list,
 #endif  // CONFIG_EXT_INTER
@@ -512,9 +392,66 @@ void av1_update_mv_context(const AV1_COMMON *cm, const MACROBLOCKD *xd,
 #endif  // CONFIG_EXT_INTER
 
 #if CONFIG_WARPED_MOTION
+#if WARPED_MOTION_SORT_SAMPLES
+int sortSamples(int *pts_mv, MV *mv, int *pts, int *pts_inref, int len);
+int findSamples(const AV1_COMMON *cm, MACROBLOCKD *xd, int mi_row, int mi_col,
+                int *pts, int *pts_inref, int *pts_mv);
+#else
 int findSamples(const AV1_COMMON *cm, MACROBLOCKD *xd, int mi_row, int mi_col,
                 int *pts, int *pts_inref);
+#endif  // WARPED_MOTION_SORT_SAMPLES
 #endif  // CONFIG_WARPED_MOTION
+
+#if CONFIG_INTRABC
+static INLINE void av1_find_ref_dv(int_mv *ref_dv, int mi_row, int mi_col) {
+  // TODO(aconverse@google.com): Handle tiles and such
+  (void)mi_col;
+  if (mi_row < MAX_MIB_SIZE) {
+    ref_dv->as_mv.row = 0;
+    ref_dv->as_mv.col = -MI_SIZE * MAX_MIB_SIZE;
+  } else {
+    ref_dv->as_mv.row = -MI_SIZE * MAX_MIB_SIZE;
+    ref_dv->as_mv.col = 0;
+  }
+}
+
+static INLINE int is_dv_valid(const MV dv, const TileInfo *const tile,
+                              int mi_row, int mi_col, BLOCK_SIZE bsize) {
+  const int bw = block_size_wide[bsize];
+  const int bh = block_size_high[bsize];
+  const int SCALE_PX_TO_MV = 8;
+  // Disallow subpixel for now
+  // SUBPEL_MASK is not the correct scale
+  if ((dv.row & (SCALE_PX_TO_MV - 1) || dv.col & (SCALE_PX_TO_MV - 1)))
+    return 0;
+  // Is the source top-left inside the current tile?
+  const int src_top_edge = mi_row * MI_SIZE * SCALE_PX_TO_MV + dv.row;
+  const int tile_top_edge = tile->mi_row_start * MI_SIZE * SCALE_PX_TO_MV;
+  if (src_top_edge < tile_top_edge) return 0;
+  const int src_left_edge = mi_col * MI_SIZE * SCALE_PX_TO_MV + dv.col;
+  const int tile_left_edge = tile->mi_col_start * MI_SIZE * SCALE_PX_TO_MV;
+  if (src_left_edge < tile_left_edge) return 0;
+  // Is the bottom right inside the current tile?
+  const int src_bottom_edge = (mi_row * MI_SIZE + bh) * SCALE_PX_TO_MV + dv.row;
+  const int tile_bottom_edge = tile->mi_row_end * MI_SIZE * SCALE_PX_TO_MV;
+  if (src_bottom_edge > tile_bottom_edge) return 0;
+  const int src_right_edge = (mi_col * MI_SIZE + bw) * SCALE_PX_TO_MV + dv.col;
+  const int tile_right_edge = tile->mi_col_end * MI_SIZE * SCALE_PX_TO_MV;
+  if (src_right_edge > tile_right_edge) return 0;
+  // Is the bottom right within an already coded SB?
+  const int active_sb_top_edge =
+      (mi_row & ~MAX_MIB_MASK) * MI_SIZE * SCALE_PX_TO_MV;
+  const int active_sb_bottom_edge =
+      ((mi_row & ~MAX_MIB_MASK) + MAX_MIB_SIZE) * MI_SIZE * SCALE_PX_TO_MV;
+  const int active_sb_left_edge =
+      (mi_col & ~MAX_MIB_MASK) * MI_SIZE * SCALE_PX_TO_MV;
+  if (src_bottom_edge > active_sb_bottom_edge) return 0;
+  if (src_bottom_edge > active_sb_top_edge &&
+      src_right_edge > active_sb_left_edge)
+    return 0;
+  return 1;
+}
+#endif  // CONFIG_INTRABC
 
 #ifdef __cplusplus
 }  // extern "C"

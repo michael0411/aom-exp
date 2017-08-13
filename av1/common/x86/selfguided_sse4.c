@@ -12,12 +12,12 @@ static void calc_block(__m128i sum, __m128i sum_sq, __m128i n,
                        __m128i one_over_n, __m128i s, int bit_depth, int idx,
                        int32_t *A, int32_t *B) {
   __m128i a, b, p;
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
   if (bit_depth > 8) {
     __m128i rounding_a = _mm_set1_epi32((1 << (2 * (bit_depth - 8))) >> 1);
     __m128i rounding_b = _mm_set1_epi32((1 << (bit_depth - 8)) >> 1);
-    __m128i shift_a = _mm_set_epi64x(0, 2 * (bit_depth - 8));
-    __m128i shift_b = _mm_set_epi64x(0, bit_depth - 8);
+    __m128i shift_a = _mm_cvtsi32_si128(2 * (bit_depth - 8));
+    __m128i shift_b = _mm_cvtsi32_si128(bit_depth - 8);
     a = _mm_srl_epi32(_mm_add_epi32(sum_sq, rounding_a), shift_a);
     b = _mm_srl_epi32(_mm_add_epi32(sum, rounding_b), shift_b);
     a = _mm_mullo_epi32(a, n);
@@ -29,7 +29,7 @@ static void calc_block(__m128i sum, __m128i sum_sq, __m128i n,
     a = _mm_mullo_epi32(sum_sq, n);
     b = _mm_mullo_epi32(sum, sum);
     p = _mm_sub_epi32(a, b);
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
   }
 #endif
 
@@ -1125,7 +1125,7 @@ void apply_selfguided_restoration_sse4_1(uint8_t *dat, int width, int height,
   }
 }
 
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 // Only the vertical sums need to be adjusted for highbitdepth
 
 static void highbd_selfguided_restoration_1_v(uint16_t *src, int width,

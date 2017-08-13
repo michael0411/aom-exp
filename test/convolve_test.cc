@@ -23,6 +23,7 @@
 #include "aom_dsp/aom_filter.h"
 #include "aom_mem/aom_mem.h"
 #include "aom_ports/mem.h"
+#include "aom_ports/aom_timer.h"
 #include "av1/common/filter.h"
 
 namespace {
@@ -92,7 +93,7 @@ typedef std::tr1::tuple<int, int, const ConvolveFunctions *> ConvolveParam;
 #define AV1_FILTER_SHIFT 7
 uint8_t clip_pixel(int x) { return x < 0 ? 0 : x > 255 ? 255 : x; }
 
-void filter_block2d_8_c(const uint8_t *src_ptr, const unsigned int src_stride,
+void filter_block2d_8_c(const uint8_t *src_ptr, unsigned int src_stride,
                         const int16_t *HFilter, const int16_t *VFilter,
                         uint8_t *dst_ptr, unsigned int dst_stride,
                         unsigned int output_width, unsigned int output_height) {
@@ -104,6 +105,8 @@ void filter_block2d_8_c(const uint8_t *src_ptr, const unsigned int src_stride,
   const unsigned int intermediate_height =
       (kInterp_Extend - 1) + output_height + kInterp_Extend;
   unsigned int i, j;
+
+  assert(intermediate_height > 7);
 
   // Size of intermediate_buffer is max_intermediate_height * filter_max_width,
   // where max_intermediate_height = (kInterp_Extend - 1) + filter_max_height
@@ -187,7 +190,7 @@ void filter_average_block2d_8_c(const uint8_t *src_ptr,
                     output_height);
 }
 
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 void highbd_filter_block2d_8_c(const uint16_t *src_ptr,
                                const unsigned int src_stride,
                                const int16_t *HFilter, const int16_t *VFilter,
@@ -209,7 +212,7 @@ void highbd_filter_block2d_8_c(const uint16_t *src_ptr,
    *                               = 23
    * and filter_max_width = 16
    */
-  uint16_t intermediate_buffer[(kMaxDimension + 8) * kMaxDimension];
+  uint16_t intermediate_buffer[(kMaxDimension + 8) * kMaxDimension] = { 0 };
   const int intermediate_next_stride =
       1 - static_cast<int>(intermediate_height * output_width);
 
@@ -277,10 +280,9 @@ void highbd_block2d_average_c(uint16_t *src, unsigned int src_stride,
 }
 
 void highbd_filter_average_block2d_8_c(
-    const uint16_t *src_ptr, const unsigned int src_stride,
-    const int16_t *HFilter, const int16_t *VFilter, uint16_t *dst_ptr,
-    unsigned int dst_stride, unsigned int output_width,
-    unsigned int output_height, int bd) {
+    const uint16_t *src_ptr, unsigned int src_stride, const int16_t *HFilter,
+    const int16_t *VFilter, uint16_t *dst_ptr, unsigned int dst_stride,
+    unsigned int output_width, unsigned int output_height, int bd) {
   uint16_t tmp[kMaxDimension * kMaxDimension];
 
   assert(output_width <= kMaxDimension);
@@ -290,7 +292,7 @@ void highbd_filter_average_block2d_8_c(
   highbd_block2d_average_c(tmp, kMaxDimension, dst_ptr, dst_stride,
                            output_width, output_height);
 }
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
 
 class ConvolveTest : public ::testing::TestWithParam<ConvolveParam> {
  public:
@@ -303,7 +305,7 @@ class ConvolveTest : public ::testing::TestWithParam<ConvolveParam> {
         aom_memalign(kDataAlignment, kOutputBufferSize));
     output_ref_ = reinterpret_cast<uint8_t *>(
         aom_memalign(kDataAlignment, kOutputBufferSize));
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
     input16_ = reinterpret_cast<uint16_t *>(aom_memalign(
                    kDataAlignment, (kInputBufferSize + 1) * sizeof(uint16_t))) +
                1;
@@ -323,7 +325,7 @@ class ConvolveTest : public ::testing::TestWithParam<ConvolveParam> {
     output_ = NULL;
     aom_free(output_ref_);
     output_ref_ = NULL;
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
     aom_free(input16_ - 1);
     input16_ = NULL;
     aom_free(output16_);
@@ -358,7 +360,7 @@ class ConvolveTest : public ::testing::TestWithParam<ConvolveParam> {
 
   virtual void SetUp() {
     UUT_ = GET_PARAM(2);
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
     if (UUT_->use_highbd_ != 0)
       mask_ = (1 << UUT_->use_highbd_) - 1;
     else
@@ -366,22 +368,29 @@ class ConvolveTest : public ::testing::TestWithParam<ConvolveParam> {
 #endif
     /* Set up guard blocks for an inner block centered in the outer block */
     for (int i = 0; i < kOutputBufferSize; ++i) {
-      if (IsIndexInBorder(i))
+      if (IsIndexInBorder(i)) {
         output_[i] = 255;
-      else
+#if CONFIG_HIGHBITDEPTH
+        output16_[i] = mask_;
+#endif
+      } else {
         output_[i] = 0;
+#if CONFIG_HIGHBITDEPTH
+        output16_[i] = 0;
+#endif
+      }
     }
 
     ::libaom_test::ACMRandom prng;
     for (int i = 0; i < kInputBufferSize; ++i) {
       if (i & 1) {
         input_[i] = 255;
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
         input16_[i] = mask_;
 #endif
       } else {
         input_[i] = prng.Rand8Extremes();
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
         input16_[i] = prng.Rand16() & mask_;
 #endif
       }
@@ -390,14 +399,14 @@ class ConvolveTest : public ::testing::TestWithParam<ConvolveParam> {
 
   void SetConstantInput(int value) {
     memset(input_, value, kInputBufferSize);
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
     aom_memset16(input16_, value, kInputBufferSize);
 #endif
   }
 
   void CopyOutputToRef() {
     memcpy(output_ref_, output_, kOutputBufferSize);
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
     // Copy 16-bit pixels values. The effective number of bytes is double.
     memcpy(output16_ref_, output16_, sizeof(output16_[0]) * kOutputBufferSize);
 #endif
@@ -411,7 +420,7 @@ class ConvolveTest : public ::testing::TestWithParam<ConvolveParam> {
 
   uint8_t *input() const {
     const int offset = BorderTop() * kOuterBlockSize + BorderLeft();
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
     if (UUT_->use_highbd_ == 0) {
       return input_ + offset;
     } else {
@@ -424,7 +433,7 @@ class ConvolveTest : public ::testing::TestWithParam<ConvolveParam> {
 
   uint8_t *output() const {
     const int offset = BorderTop() * kOuterBlockSize + BorderLeft();
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
     if (UUT_->use_highbd_ == 0) {
       return output_ + offset;
     } else {
@@ -437,7 +446,7 @@ class ConvolveTest : public ::testing::TestWithParam<ConvolveParam> {
 
   uint8_t *output_ref() const {
     const int offset = BorderTop() * kOuterBlockSize + BorderLeft();
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
     if (UUT_->use_highbd_ == 0) {
       return output_ref_ + offset;
     } else {
@@ -449,7 +458,7 @@ class ConvolveTest : public ::testing::TestWithParam<ConvolveParam> {
   }
 
   uint16_t lookup(uint8_t *list, int index) const {
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
     if (UUT_->use_highbd_ == 0) {
       return list[index];
     } else {
@@ -461,7 +470,7 @@ class ConvolveTest : public ::testing::TestWithParam<ConvolveParam> {
   }
 
   void assign_val(uint8_t *list, int index, uint16_t val) const {
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
     if (UUT_->use_highbd_ == 0) {
       list[index] = (uint8_t)val;
     } else {
@@ -473,11 +482,10 @@ class ConvolveTest : public ::testing::TestWithParam<ConvolveParam> {
   }
 
   void wrapper_filter_average_block2d_8_c(
-      const uint8_t *src_ptr, const unsigned int src_stride,
-      const int16_t *HFilter, const int16_t *VFilter, uint8_t *dst_ptr,
-      unsigned int dst_stride, unsigned int output_width,
-      unsigned int output_height) {
-#if CONFIG_AOM_HIGHBITDEPTH
+      const uint8_t *src_ptr, unsigned int src_stride, const int16_t *HFilter,
+      const int16_t *VFilter, uint8_t *dst_ptr, unsigned int dst_stride,
+      unsigned int output_width, unsigned int output_height) {
+#if CONFIG_HIGHBITDEPTH
     if (UUT_->use_highbd_ == 0) {
       filter_average_block2d_8_c(src_ptr, src_stride, HFilter, VFilter, dst_ptr,
                                  dst_stride, output_width, output_height);
@@ -493,14 +501,11 @@ class ConvolveTest : public ::testing::TestWithParam<ConvolveParam> {
 #endif
   }
 
-  void wrapper_filter_block2d_8_c(const uint8_t *src_ptr,
-                                  const unsigned int src_stride,
-                                  const int16_t *HFilter,
-                                  const int16_t *VFilter, uint8_t *dst_ptr,
-                                  unsigned int dst_stride,
-                                  unsigned int output_width,
-                                  unsigned int output_height) {
-#if CONFIG_AOM_HIGHBITDEPTH
+  void wrapper_filter_block2d_8_c(
+      const uint8_t *src_ptr, unsigned int src_stride, const int16_t *HFilter,
+      const int16_t *VFilter, uint8_t *dst_ptr, unsigned int dst_stride,
+      unsigned int output_width, unsigned int output_height) {
+#if CONFIG_HIGHBITDEPTH
     if (UUT_->use_highbd_ == 0) {
       filter_block2d_8_c(src_ptr, src_stride, HFilter, VFilter, dst_ptr,
                          dst_stride, output_width, output_height);
@@ -520,7 +525,7 @@ class ConvolveTest : public ::testing::TestWithParam<ConvolveParam> {
   static uint8_t *input_;
   static uint8_t *output_;
   static uint8_t *output_ref_;
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
   static uint16_t *input16_;
   static uint16_t *output16_;
   static uint16_t *output16_ref_;
@@ -531,7 +536,7 @@ class ConvolveTest : public ::testing::TestWithParam<ConvolveParam> {
 uint8_t *ConvolveTest::input_ = NULL;
 uint8_t *ConvolveTest::output_ = NULL;
 uint8_t *ConvolveTest::output_ref_ = NULL;
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 uint16_t *ConvolveTest::input16_ = NULL;
 uint16_t *ConvolveTest::output16_ = NULL;
 uint16_t *ConvolveTest::output16_ref_ = NULL;
@@ -667,7 +672,7 @@ const int16_t kInvalidFilter[8] = { 0 };
 TEST_P(ConvolveTest, MatchesReferenceSubpixelFilter) {
   uint8_t *const in = input();
   uint8_t *const out = output();
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
   uint8_t ref8[kOutputStride * kMaxDimension];
   uint16_t ref16[kOutputStride * kMaxDimension];
   uint8_t *ref;
@@ -730,7 +735,7 @@ TEST_P(ConvolveTest, MatchesReferenceSubpixelFilter) {
 TEST_P(ConvolveTest, MatchesReferenceAveragingSubpixelFilter) {
   uint8_t *const in = input();
   uint8_t *const out = output();
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
   uint8_t ref8[kOutputStride * kMaxDimension];
   uint16_t ref16[kOutputStride * kMaxDimension];
   uint8_t *ref;
@@ -748,7 +753,7 @@ TEST_P(ConvolveTest, MatchesReferenceAveragingSubpixelFilter) {
   for (int y = 0; y < Height(); ++y) {
     for (int x = 0; x < Width(); ++x) {
       uint16_t r;
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
       if (UUT_->use_highbd_ == 0 || UUT_->use_highbd_ == 8) {
         r = prng.Rand8Extremes();
       } else {
@@ -813,7 +818,7 @@ TEST_P(ConvolveTest, MatchesReferenceAveragingSubpixelFilter) {
 TEST_P(ConvolveTest, FilterExtremes) {
   uint8_t *const in = input();
   uint8_t *const out = output();
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
   uint8_t ref8[kOutputStride * kMaxDimension];
   uint16_t ref16[kOutputStride * kMaxDimension];
   uint8_t *ref;
@@ -831,7 +836,7 @@ TEST_P(ConvolveTest, FilterExtremes) {
   for (int y = 0; y < Height(); ++y) {
     for (int x = 0; x < Width(); ++x) {
       uint16_t r;
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
       if (UUT_->use_highbd_ == 0 || UUT_->use_highbd_ == 8) {
         r = prng.Rand8Extremes();
       } else {
@@ -850,7 +855,7 @@ TEST_P(ConvolveTest, FilterExtremes) {
     while (seed_val < 256) {
       for (int y = 0; y < 8; ++y) {
         for (int x = 0; x < 8; ++x) {
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
           assign_val(in, y * kOutputStride + x - SUBPEL_TAPS / 2 + 1,
                      ((seed_val >> (axis ? y : x)) & 1) * mask_);
 #else
@@ -942,9 +947,133 @@ TEST_P(ConvolveTest, CheckScalingFiltering) {
   }
 }
 
+TEST_P(ConvolveTest, DISABLED_Copy_Speed) {
+  const uint8_t *const in = input();
+  uint8_t *const out = output();
+  const int kNumTests = 5000000;
+  const int width = Width();
+  const int height = Height();
+  aom_usec_timer timer;
+
+  aom_usec_timer_start(&timer);
+  for (int n = 0; n < kNumTests; ++n) {
+    UUT_->copy_(in, kInputStride, out, kOutputStride, NULL, 0, NULL, 0, width,
+                height);
+  }
+  aom_usec_timer_mark(&timer);
+
+  const int elapsed_time = static_cast<int>(aom_usec_timer_elapsed(&timer));
+  printf("convolve_copy_%dx%d_%d: %d us\n", width, height,
+         UUT_->use_highbd_ ? UUT_->use_highbd_ : 8, elapsed_time);
+}
+
+TEST_P(ConvolveTest, DISABLED_Avg_Speed) {
+  const uint8_t *const in = input();
+  uint8_t *const out = output();
+  const int kNumTests = 5000000;
+  const int width = Width();
+  const int height = Height();
+  aom_usec_timer timer;
+
+  aom_usec_timer_start(&timer);
+  for (int n = 0; n < kNumTests; ++n) {
+    UUT_->avg_(in, kInputStride, out, kOutputStride, NULL, 0, NULL, 0, width,
+               height);
+  }
+  aom_usec_timer_mark(&timer);
+
+  const int elapsed_time = static_cast<int>(aom_usec_timer_elapsed(&timer));
+  printf("convolve_avg_%dx%d_%d: %d us\n", width, height,
+         UUT_->use_highbd_ ? UUT_->use_highbd_ : 8, elapsed_time);
+}
+
+TEST_P(ConvolveTest, DISABLED_Speed) {
+  uint8_t *const in = input();
+  uint8_t *const out = output();
+#if CONFIG_HIGHBITDEPTH
+  uint8_t ref8[kOutputStride * kMaxDimension];
+  uint16_t ref16[kOutputStride * kMaxDimension];
+  uint8_t *ref;
+  if (UUT_->use_highbd_ == 0) {
+    ref = ref8;
+  } else {
+    ref = CONVERT_TO_BYTEPTR(ref16);
+  }
+#else
+  uint8_t ref[kOutputStride * kMaxDimension];
+#endif
+
+  // Populate ref and out with some random data
+  ::libaom_test::ACMRandom prng;
+  for (int y = 0; y < Height(); ++y) {
+    for (int x = 0; x < Width(); ++x) {
+      uint16_t r;
+#if CONFIG_HIGHBITDEPTH
+      if (UUT_->use_highbd_ == 0 || UUT_->use_highbd_ == 8) {
+        r = prng.Rand8Extremes();
+      } else {
+        r = prng.Rand16() & mask_;
+      }
+#else
+      r = prng.Rand8Extremes();
+#endif
+
+      assign_val(out, y * kOutputStride + x, r);
+      assign_val(ref, y * kOutputStride + x, r);
+    }
+  }
+
+  const InterpFilter filter = (InterpFilter)1;
+  const InterpKernel *filters =
+      (const InterpKernel *)av1_get_interp_filter_kernel(filter);
+  wrapper_filter_average_block2d_8_c(in, kInputStride, filters[1], filters[1],
+                                     out, kOutputStride, Width(), Height());
+
+  aom_usec_timer timer;
+  int tests_num = 1000;
+
+  aom_usec_timer_start(&timer);
+  while (tests_num > 0) {
+    for (int filter_bank = 0; filter_bank < kNumFilterBanks; ++filter_bank) {
+      const InterpFilter filter = (InterpFilter)filter_bank;
+      const InterpKernel *filters =
+          (const InterpKernel *)av1_get_interp_filter_kernel(filter);
+#if CONFIG_DUAL_FILTER
+      const InterpFilterParams filter_params =
+          av1_get_interp_filter_params(filter);
+      if (filter_params.taps != SUBPEL_TAPS) continue;
+#endif
+
+      for (int filter_x = 0; filter_x < kNumFilters; ++filter_x) {
+        for (int filter_y = 0; filter_y < kNumFilters; ++filter_y) {
+          if (filter_x && filter_y)
+            ASM_REGISTER_STATE_CHECK(UUT_->hv8_(
+                in, kInputStride, out, kOutputStride, filters[filter_x], 16,
+                filters[filter_y], 16, Width(), Height()));
+          if (filter_y)
+            ASM_REGISTER_STATE_CHECK(
+                UUT_->v8_(in, kInputStride, out, kOutputStride, kInvalidFilter,
+                          16, filters[filter_y], 16, Width(), Height()));
+          else if (filter_x)
+            ASM_REGISTER_STATE_CHECK(UUT_->h8_(
+                in, kInputStride, out, kOutputStride, filters[filter_x], 16,
+                kInvalidFilter, 16, Width(), Height()));
+        }
+      }
+    }
+    tests_num--;
+  }
+  aom_usec_timer_mark(&timer);
+
+  const int elapsed_time =
+      static_cast<int>(aom_usec_timer_elapsed(&timer) / 1000);
+  printf("%dx%d (bitdepth %d) time: %5d ms\n", Width(), Height(),
+         UUT_->use_highbd_, elapsed_time);
+}
+
 using std::tr1::make_tuple;
 
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 #define WRAP(func, bd)                                                       \
   void wrap_##func##_##bd(                                                   \
       const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,                \
@@ -1004,6 +1133,36 @@ WRAP(convolve8_vert_c, 12)
 WRAP(convolve8_avg_vert_c, 12)
 WRAP(convolve8_c, 12)
 WRAP(convolve8_avg_c, 12)
+
+#if HAVE_AVX2
+WRAP(convolve_copy_avx2, 8)
+WRAP(convolve_avg_avx2, 8)
+WRAP(convolve8_horiz_avx2, 8)
+WRAP(convolve8_avg_horiz_avx2, 8)
+WRAP(convolve8_vert_avx2, 8)
+WRAP(convolve8_avg_vert_avx2, 8)
+WRAP(convolve8_avx2, 8)
+WRAP(convolve8_avg_avx2, 8)
+
+WRAP(convolve_copy_avx2, 10)
+WRAP(convolve_avg_avx2, 10)
+WRAP(convolve8_avx2, 10)
+WRAP(convolve8_horiz_avx2, 10)
+WRAP(convolve8_vert_avx2, 10)
+WRAP(convolve8_avg_avx2, 10)
+WRAP(convolve8_avg_horiz_avx2, 10)
+WRAP(convolve8_avg_vert_avx2, 10)
+
+WRAP(convolve_copy_avx2, 12)
+WRAP(convolve_avg_avx2, 12)
+WRAP(convolve8_avx2, 12)
+WRAP(convolve8_horiz_avx2, 12)
+WRAP(convolve8_vert_avx2, 12)
+WRAP(convolve8_avg_avx2, 12)
+WRAP(convolve8_avg_horiz_avx2, 12)
+WRAP(convolve8_avg_vert_avx2, 12)
+#endif  // HAVE_AVX2
+
 #undef WRAP
 
 const ConvolveFunctions convolve8_c(
@@ -1043,7 +1202,7 @@ const ConvolveParam kArrayConvolve_c[] = { ALL_SIZES(convolve8_c) };
 INSTANTIATE_TEST_CASE_P(C, ConvolveTest, ::testing::ValuesIn(kArrayConvolve_c));
 
 #if HAVE_SSE2 && ARCH_X86_64
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 const ConvolveFunctions convolve8_sse2(
     wrap_convolve_copy_sse2_8, wrap_convolve_avg_sse2_8,
     wrap_convolve8_horiz_sse2_8, wrap_convolve8_avg_horiz_sse2_8,
@@ -1080,7 +1239,7 @@ const ConvolveFunctions convolve8_sse2(
     aom_scaled_avg_vert_c, aom_scaled_2d_c, aom_scaled_avg_2d_c, 0);
 
 const ConvolveParam kArrayConvolve_sse2[] = { ALL_SIZES(convolve8_sse2) };
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
 INSTANTIATE_TEST_CASE_P(SSE2, ConvolveTest,
                         ::testing::ValuesIn(kArrayConvolve_sse2));
 #endif
@@ -1098,7 +1257,35 @@ INSTANTIATE_TEST_CASE_P(SSSE3, ConvolveTest,
                         ::testing::ValuesIn(kArrayConvolve8_ssse3));
 #endif
 
-#if HAVE_AVX2 && HAVE_SSSE3
+#if HAVE_AVX2
+#if CONFIG_HIGHBITDEPTH
+const ConvolveFunctions convolve8_avx2(
+    wrap_convolve_copy_avx2_8, wrap_convolve_avg_avx2_8,
+    wrap_convolve8_horiz_avx2_8, wrap_convolve8_avg_horiz_avx2_8,
+    wrap_convolve8_vert_avx2_8, wrap_convolve8_avg_vert_avx2_8,
+    wrap_convolve8_avx2_8, wrap_convolve8_avg_avx2_8, wrap_convolve8_horiz_c_8,
+    wrap_convolve8_avg_horiz_c_8, wrap_convolve8_vert_c_8,
+    wrap_convolve8_avg_vert_c_8, wrap_convolve8_c_8, wrap_convolve8_avg_c_8, 8);
+const ConvolveFunctions convolve10_avx2(
+    wrap_convolve_copy_avx2_10, wrap_convolve_avg_avx2_10,
+    wrap_convolve8_horiz_avx2_10, wrap_convolve8_avg_horiz_avx2_10,
+    wrap_convolve8_vert_avx2_10, wrap_convolve8_avg_vert_avx2_10,
+    wrap_convolve8_avx2_10, wrap_convolve8_avg_avx2_10,
+    wrap_convolve8_horiz_c_10, wrap_convolve8_avg_horiz_c_10,
+    wrap_convolve8_vert_c_10, wrap_convolve8_avg_vert_c_10, wrap_convolve8_c_10,
+    wrap_convolve8_avg_c_10, 10);
+const ConvolveFunctions convolve12_avx2(
+    wrap_convolve_copy_avx2_12, wrap_convolve_avg_avx2_12,
+    wrap_convolve8_horiz_avx2_12, wrap_convolve8_avg_horiz_avx2_12,
+    wrap_convolve8_vert_avx2_12, wrap_convolve8_avg_vert_avx2_12,
+    wrap_convolve8_avx2_12, wrap_convolve8_avg_avx2_12,
+    wrap_convolve8_horiz_c_12, wrap_convolve8_avg_horiz_c_12,
+    wrap_convolve8_vert_c_12, wrap_convolve8_avg_vert_c_12, wrap_convolve8_c_12,
+    wrap_convolve8_avg_c_12, 12);
+const ConvolveParam kArrayConvolve8_avx2[] = { ALL_SIZES(convolve8_avx2),
+                                               ALL_SIZES(convolve10_avx2),
+                                               ALL_SIZES(convolve12_avx2) };
+#else
 const ConvolveFunctions convolve8_avx2(
     aom_convolve_copy_c, aom_convolve_avg_c, aom_convolve8_horiz_avx2,
     aom_convolve8_avg_horiz_ssse3, aom_convolve8_vert_avx2,
@@ -1107,9 +1294,10 @@ const ConvolveFunctions convolve8_avx2(
     aom_scaled_avg_vert_c, aom_scaled_2d_c, aom_scaled_avg_2d_c, 0);
 
 const ConvolveParam kArrayConvolve8_avx2[] = { ALL_SIZES(convolve8_avx2) };
+#endif  // CONFIG_HIGHBITDEPTH
 INSTANTIATE_TEST_CASE_P(AVX2, ConvolveTest,
                         ::testing::ValuesIn(kArrayConvolve8_avx2));
-#endif  // HAVE_AVX2 && HAVE_SSSE3
+#endif  // HAVE_AVX2
 
 // TODO(any): Make NEON versions support 128x128 128x64 64x128 block sizes
 #if HAVE_NEON && !(CONFIG_AV1 && CONFIG_EXT_PARTITION)

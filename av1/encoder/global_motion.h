@@ -20,46 +20,46 @@
 extern "C" {
 #endif
 
-extern const double gm_advantage_thresh[TRANS_TYPES];
-
-void convert_to_params(const double *params, int32_t *model);
+#define RANSAC_NUM_MOTIONS 1
 
 void convert_model_to_params(const double *params, WarpedMotionParams *model);
 
-// Adds some offset to a global motion parameter and handles
-// all of the necessary precision shifts, clamping, and
-// zero-centering.
-int32_t add_param_offset(int param_index, int32_t param_value, int32_t offset);
+int is_enough_erroradvantage(double erroradv, int params_cost);
 
-void force_wmtype(WarpedMotionParams *wm, TransformationType wmtype);
-
-double refine_integerized_param(WarpedMotionParams *wm,
-                                TransformationType wmtype,
-#if CONFIG_AOM_HIGHBITDEPTH
-                                int use_hbd, int bd,
-#endif  // CONFIG_AOM_HIGHBITDEPTH
-                                uint8_t *ref, int r_width, int r_height,
-                                int r_stride, uint8_t *dst, int d_width,
-                                int d_height, int d_stride, int n_refinements);
+// Returns the av1_warp_error between "dst" and the result of applying the
+// motion params that result from fine-tuning "wm" to "ref". Note that "wm" is
+// modified in place.
+int64_t refine_integerized_param(WarpedMotionParams *wm,
+                                 TransformationType wmtype,
+#if CONFIG_HIGHBITDEPTH
+                                 int use_hbd, int bd,
+#endif  // CONFIG_HIGHBITDEPTH
+                                 uint8_t *ref, int r_width, int r_height,
+                                 int r_stride, uint8_t *dst, int d_width,
+                                 int d_height, int d_stride, int n_refinements,
+                                 int64_t best_frame_error);
 
 /*
-  Computes global motion parameters between two frames. The array
-  "params" should be length 9, where the first 2 slots are translation
-  parameters in (row, col) order, and the remaining slots correspond
-  to values in the transformation matrix of the corresponding motion
-  model. They are arranged in "params" such that values on the tx-matrix
-  diagonal have odd numbered indices so the folowing matrix:
-  A | B
-  C | D
-  would produce params = [trans row, trans col, B, A, C, D]
+  Computes "num_motions" candidate global motion parameters between two frames.
+  The array "params_by_motion" should be length 8 * "num_motions". The ordering
+  of each set of parameters is best described  by the homography:
+
+        [x'     (m2 m3 m0   [x
+    z .  y'  =   m4 m5 m1 *  y
+         1]      m6 m7 1)    1]
+
+  where m{i} represents the ith value in any given set of parameters.
+
+  "num_inliers" should be length "num_motions", and will be populated with the
+  number of inlier feature points for each motion. Params for which the
+  num_inliers entry is 0 should be ignored by the caller.
 */
-int compute_global_motion_feature_based(TransformationType type,
-                                        YV12_BUFFER_CONFIG *frm,
-                                        YV12_BUFFER_CONFIG *ref,
-#if CONFIG_AOM_HIGHBITDEPTH
-                                        int bit_depth,
+int compute_global_motion_feature_based(
+    TransformationType type, YV12_BUFFER_CONFIG *frm, YV12_BUFFER_CONFIG *ref,
+#if CONFIG_HIGHBITDEPTH
+    int bit_depth,
 #endif
-                                        double *params);
+    int *num_inliers_by_motion, double *params_by_motion, int num_motions);
 #ifdef __cplusplus
 }  // extern "C"
 #endif

@@ -48,9 +48,19 @@ DECLARE_ALIGNED(16, static const int16_t,
 };
 #endif  // USE_TEMPORALFILTER_12TAP
 
-#if CONFIG_DUAL_FILTER
+#if USE_EXTRA_FILTER
 DECLARE_ALIGNED(256, static const InterpKernel,
                 sub_pel_filters_8[SUBPEL_SHIFTS]) = {
+#if CONFIG_FILTER_7BIT
+  { 0, 0, 0, 128, 0, 0, 0, 0 },      { 0, 2, -6, 126, 8, -2, 0, 0 },
+  { 0, 2, -10, 122, 18, -4, 0, 0 },  { 0, 2, -12, 116, 28, -8, 2, 0 },
+  { 0, 2, -14, 110, 38, -10, 2, 0 }, { 0, 2, -14, 102, 48, -12, 2, 0 },
+  { 0, 2, -16, 94, 58, -12, 2, 0 },  { 0, 2, -14, 84, 66, -12, 2, 0 },
+  { 0, 2, -14, 76, 76, -14, 2, 0 },  { 0, 2, -12, 66, 84, -14, 2, 0 },
+  { 0, 2, -12, 58, 94, -16, 2, 0 },  { 0, 2, -12, 48, 102, -14, 2, 0 },
+  { 0, 2, -10, 38, 110, -14, 2, 0 }, { 0, 2, -8, 28, 116, -12, 2, 0 },
+  { 0, 0, -4, 18, 122, -10, 2, 0 },  { 0, 0, -2, 8, 126, -6, 2, 0 }
+#else
   // intfilt 0.575
   { 0, 0, 0, 128, 0, 0, 0, 0 },        { 0, 1, -5, 126, 8, -3, 1, 0 },
   { -1, 3, -10, 123, 18, -6, 2, -1 },  { -1, 4, -14, 118, 27, -9, 3, 0 },
@@ -60,10 +70,21 @@ DECLARE_ALIGNED(256, static const InterpKernel,
   { -1, 5, -17, 58, 97, -19, 6, -1 },  { -1, 4, -14, 48, 105, -18, 5, -1 },
   { -1, 4, -12, 37, 112, -16, 5, -1 }, { 0, 3, -9, 27, 118, -14, 4, -1 },
   { -1, 2, -6, 18, 123, -10, 3, -1 },  { 0, 1, -3, 8, 126, -5, 1, 0 },
+#endif
 };
 
 DECLARE_ALIGNED(256, static const InterpKernel,
                 sub_pel_filters_regular_uv[SUBPEL_SHIFTS]) = {
+#if CONFIG_FILTER_7BIT
+  { 0, 0, 0, 128, 0, 0, 0, 0 },      { 0, 2, -6, 126, 8, -2, 0, 0 },
+  { 0, 2, -10, 122, 18, -4, 0, 0 },  { 0, 2, -12, 116, 28, -8, 2, 0 },
+  { 0, 2, -14, 110, 38, -10, 2, 0 }, { 0, 2, -14, 102, 48, -12, 2, 0 },
+  { 0, 2, -16, 94, 58, -12, 2, 0 },  { 0, 2, -14, 84, 66, -12, 2, 0 },
+  { 0, 2, -14, 76, 76, -14, 2, 0 },  { 0, 2, -12, 66, 84, -14, 2, 0 },
+  { 0, 2, -12, 58, 94, -16, 2, 0 },  { 0, 2, -12, 48, 102, -14, 2, 0 },
+  { 0, 2, -10, 38, 110, -14, 2, 0 }, { 0, 2, -8, 28, 116, -12, 2, 0 },
+  { 0, 0, -4, 18, 122, -10, 2, 0 },  { 0, 0, -2, 8, 126, -6, 2, 0 }
+#else
   // intfilt 0.575
   { 0, 0, 0, 128, 0, 0, 0, 0 },        { 0, 1, -5, 126, 8, -3, 1, 0 },
   { -1, 3, -10, 123, 18, -6, 2, -1 },  { -1, 4, -14, 118, 27, -9, 3, 0 },
@@ -73,8 +94,10 @@ DECLARE_ALIGNED(256, static const InterpKernel,
   { -1, 5, -17, 58, 97, -19, 6, -1 },  { -1, 4, -14, 48, 105, -18, 5, -1 },
   { -1, 4, -12, 37, 112, -16, 5, -1 }, { 0, 3, -9, 27, 118, -14, 4, -1 },
   { -1, 2, -6, 18, 123, -10, 3, -1 },  { 0, 1, -3, 8, 126, -5, 1, 0 },
+#endif
 };
 
+#if USE_12TAP_FILTER
 DECLARE_ALIGNED(256, static const InterpKernel,
                 sub_pel_filters_8sharp[SUBPEL_SHIFTS]) = {
   // intfilt 0.8
@@ -108,6 +131,30 @@ DECLARE_ALIGNED(256, static const int16_t,
   { 0, 1, -2, 4, -8, 18, 124, -13, 6, -3, 1, 0 },
   { 0, 1, -1, 2, -4, 8, 127, -7, 3, -2, 1, 0 },
 };
+#else
+DECLARE_ALIGNED(256, static const InterpKernel,
+                sub_pel_filters_8sharp[SUBPEL_SHIFTS]) = {
+#if CONFIG_FILTER_7BIT
+  { 0, 0, 0, 128, 0, 0, 0, 0 },         { -2, 2, -6, 126, 8, -2, 2, 0 },
+  { -2, 6, -12, 124, 16, -6, 4, -2 },   { -2, 8, -18, 120, 26, -10, 6, -2 },
+  { -4, 10, -22, 116, 38, -14, 6, -2 }, { -4, 10, -22, 108, 48, -18, 8, -2 },
+  { -4, 10, -24, 100, 60, -20, 8, -2 }, { -4, 10, -24, 90, 70, -22, 10, -2 },
+  { -4, 12, -24, 80, 80, -24, 12, -4 }, { -2, 10, -22, 70, 90, -24, 10, -4 },
+  { -2, 8, -20, 60, 100, -24, 10, -4 }, { -2, 8, -18, 48, 108, -22, 10, -4 },
+  { -2, 6, -14, 38, 116, -22, 10, -4 }, { -2, 6, -10, 26, 120, -18, 8, -2 },
+  { -2, 4, -6, 16, 124, -12, 6, -2 },   { 0, 2, -2, 8, 126, -6, 2, -2 }
+#else
+  { 0, 0, 0, 128, 0, 0, 0, 0 },         { -1, 3, -7, 127, 8, -3, 1, 0 },
+  { -2, 5, -13, 125, 17, -6, 3, -1 },   { -3, 7, -17, 121, 27, -10, 5, -2 },
+  { -4, 9, -20, 115, 37, -13, 6, -2 },  { -4, 10, -23, 108, 48, -16, 8, -3 },
+  { -4, 10, -24, 100, 59, -19, 9, -3 }, { -4, 11, -24, 90, 70, -21, 10, -4 },
+  { -4, 11, -23, 80, 80, -23, 11, -4 }, { -4, 10, -21, 70, 90, -24, 11, -4 },
+  { -3, 9, -19, 59, 100, -24, 10, -4 }, { -3, 8, -16, 48, 108, -23, 10, -4 },
+  { -2, 6, -13, 37, 115, -20, 9, -4 },  { -2, 5, -10, 27, 121, -17, 7, -3 },
+  { -1, 3, -6, 17, 125, -13, 5, -2 },   { 0, 1, -3, 8, 127, -7, 3, -1 }
+#endif
+};
+#endif
 
 DECLARE_ALIGNED(256, static const InterpKernel,
                 sub_pel_filters_8smooth2[SUBPEL_SHIFTS]) = {
@@ -137,6 +184,16 @@ DECLARE_ALIGNED(256, static const InterpKernel,
 
 DECLARE_ALIGNED(256, static const InterpKernel,
                 sub_pel_filters_8smooth[SUBPEL_SHIFTS]) = {
+#if CONFIG_FILTER_7BIT
+  { 0, 0, 0, 128, 0, 0, 0, 0 },     { 0, 2, 28, 62, 34, 2, 0, 0 },
+  { 0, 0, 26, 62, 36, 4, 0, 0 },    { 0, 0, 22, 62, 40, 4, 0, 0 },
+  { 0, 0, 20, 60, 42, 6, 0, 0 },    { 0, 0, 18, 58, 44, 8, 0, 0 },
+  { 0, 0, 16, 56, 46, 10, 0, 0 },   { 0, -2, 16, 54, 48, 12, 0, 0 },
+  { 0, -2, 14, 52, 52, 14, -2, 0 }, { 0, 0, 12, 48, 54, 16, -2, 0 },
+  { 0, 0, 10, 46, 56, 16, 0, 0 },   { 0, 0, 8, 44, 58, 18, 0, 0 },
+  { 0, 0, 6, 42, 60, 20, 0, 0 },    { 0, 0, 4, 40, 62, 22, 0, 0 },
+  { 0, 0, 4, 36, 62, 26, 0, 0 },    { 0, 0, 2, 34, 62, 28, 2, 0 }
+#else
   // freqmultiplier = 0.8
   { 0, 0, 0, 128, 0, 0, 0, 0 },    { 0, -5, 13, 102, 24, -7, 1, 0 },
   { 0, -4, 8, 100, 31, -8, 1, 0 }, { 0, -3, 4, 97, 37, -8, 1, 0 },
@@ -146,10 +203,21 @@ DECLARE_ALIGNED(256, static const InterpKernel,
   { 0, 0, -9, 59, 84, -5, -1, 0 }, { 0, 1, -9, 51, 90, -3, -2, 0 },
   { 0, 1, -9, 44, 94, 0, -2, 0 },  { 0, 1, -8, 37, 97, 4, -3, 0 },
   { 0, 1, -8, 31, 100, 8, -4, 0 }, { 0, 1, -7, 24, 102, 13, -5, 0 },
+#endif
 };
 
 DECLARE_ALIGNED(256, static const InterpKernel,
                 sub_pel_filters_smooth_uv[SUBPEL_SHIFTS]) = {
+#if CONFIG_FILTER_7BIT
+  { 0, 0, 0, 128, 0, 0, 0, 0 },     { 0, 2, 28, 62, 34, 2, 0, 0 },
+  { 0, 0, 26, 62, 36, 4, 0, 0 },    { 0, 0, 22, 62, 40, 4, 0, 0 },
+  { 0, 0, 20, 60, 42, 6, 0, 0 },    { 0, 0, 18, 58, 44, 8, 0, 0 },
+  { 0, 0, 16, 56, 46, 10, 0, 0 },   { 0, -2, 16, 54, 48, 12, 0, 0 },
+  { 0, -2, 14, 52, 52, 14, -2, 0 }, { 0, 0, 12, 48, 54, 16, -2, 0 },
+  { 0, 0, 10, 46, 56, 16, 0, 0 },   { 0, 0, 8, 44, 58, 18, 0, 0 },
+  { 0, 0, 6, 42, 60, 20, 0, 0 },    { 0, 0, 4, 40, 62, 22, 0, 0 },
+  { 0, 0, 4, 36, 62, 26, 0, 0 },    { 0, 0, 2, 34, 62, 28, 2, 0 }
+#else
   // freqmultiplier = 0.8
   { 0, 0, 0, 128, 0, 0, 0, 0 },    { 0, -5, 13, 102, 24, -7, 1, 0 },
   { 0, -4, 8, 100, 31, -8, 1, 0 }, { 0, -3, 4, 97, 37, -8, 1, 0 },
@@ -159,8 +227,9 @@ DECLARE_ALIGNED(256, static const InterpKernel,
   { 0, 0, -9, 59, 84, -5, -1, 0 }, { 0, 1, -9, 51, 90, -3, -2, 0 },
   { 0, 1, -9, 44, 94, 0, -2, 0 },  { 0, 1, -8, 37, 97, 4, -3, 0 },
   { 0, 1, -8, 31, 100, 8, -4, 0 }, { 0, 1, -7, 24, 102, 13, -5, 0 },
+#endif
 };
-#else  // CONFIG_DUAL_FILTER
+#else  // USE_EXTRA_FILTER
 
 DECLARE_ALIGNED(256, static const InterpKernel,
                 sub_pel_filters_8[SUBPEL_SHIFTS]) = {
@@ -184,7 +253,6 @@ DECLARE_ALIGNED(256, static const InterpKernel,
   { 0, 2, -6, 18, 122, -10, 3, -1 },   { 0, 1, -3, 8, 126, -5, 1, 0 }
 #endif
 };
-
 
 DECLARE_ALIGNED(256, static const InterpKernel,
                 sub_pel_filters_8sharp[SUBPEL_SHIFTS]) = {
@@ -231,7 +299,7 @@ DECLARE_ALIGNED(256, static const InterpKernel,
   { 0, -3, 2, 41, 63, 29, -2, -2 },   { 0, -3, 1, 38, 64, 32, -1, -3 }
 #endif
 };
-#endif  // CONFIG_DUAL_FILTER
+#endif  // USE_EXTRA_FILTER
 
 #if CONFIG_SHORT_FILTER
 
@@ -268,7 +336,7 @@ sub_pel_filters_4smooth[SUBPEL_SHIFTS]) = {
 };
 
 static const InterpFilterParams av1_interp_4tap[2] = {
-	{(const int16_t *)sub_pel_filters_4, SUBPEL_TAPS, SUBPEL_SHIFTS, FOURTAP_REGULAR},
+	{ (const int16_t *)sub_pel_filters_4, SUBPEL_TAPS, SUBPEL_SHIFTS, FOURTAP_REGULAR },
 	{ (const int16_t *)sub_pel_filters_4smooth, SUBPEL_TAPS, SUBPEL_SHIFTS, FOURTAP_SMOOTH },
 };
 #endif
@@ -284,15 +352,20 @@ const InterpKernel *av1_intra_filter_kernels[INTRA_FILTERS] = {
 #endif  // CONFIG_INTRA_INTERP
 #endif  // CONFIG_EXT_INTRA
 
-#if CONFIG_DUAL_FILTER
+#if USE_EXTRA_FILTER
 static const InterpFilterParams
     av1_interp_filter_params_list[SWITCHABLE_FILTERS + EXTRA_FILTERS] = {
       { (const int16_t *)sub_pel_filters_8, SUBPEL_TAPS, SUBPEL_SHIFTS,
         EIGHTTAP_REGULAR },
       { (const int16_t *)sub_pel_filters_8smooth, SUBPEL_TAPS, SUBPEL_SHIFTS,
         EIGHTTAP_SMOOTH },
+#if USE_12TAP_FILTER
       { (const int16_t *)sub_pel_filters_10sharp, 12, SUBPEL_SHIFTS,
         MULTITAP_SHARP },
+#else
+      { (const int16_t *)sub_pel_filters_8sharp, SUBPEL_TAPS, SUBPEL_SHIFTS,
+        EIGHTTAP_SHARP },
+#endif
       { (const int16_t *)sub_pel_filters_8smooth2, SUBPEL_TAPS, SUBPEL_SHIFTS,
         EIGHTTAP_SMOOTH2 },
       { (const int16_t *)bilinear_filters, SUBPEL_TAPS, SUBPEL_SHIFTS,
@@ -320,7 +393,7 @@ static const InterpFilterParams
       { (const int16_t *)bilinear_filters, SUBPEL_TAPS, SUBPEL_SHIFTS,
         BILINEAR }
     };
-#endif  // CONFIG_DUAL_FILTER
+#endif  // USE_EXTRA_FILTER
 
 #if USE_TEMPORALFILTER_12TAP
 static const InterpFilterParams av1_interp_temporalfilter_12tap = {
@@ -369,11 +442,17 @@ const int16_t *av1_get_interp_filter_kernel(const InterpFilter interp_filter) {
 InterpFilter av1_get_plane_interp_filter(InterpFilter interp_filter,
                                          int plane) {
 #if USE_TEMPORALFILTER_12TAP
+#if USE_EXTRA_FILTER
   assert(interp_filter <= EIGHTTAP_SHARP ||
          interp_filter == TEMPORALFILTER_12TAP);
+#else   // USE_EXTRA_FILTER
+  assert(interp_filter <= SWITCHABLE_FILTERS ||
+         interp_filter == TEMPORALFILTER_12TAP);
+#endif  // USE_EXTRA_FILTER
 #else
   assert(interp_filter <= EIGHTTAP_SHARP);
 #endif
+#if USE_EXTRA_FILTER
   if (plane == 0) {
     return interp_filter;
   } else {
@@ -385,5 +464,9 @@ InterpFilter av1_get_plane_interp_filter(InterpFilter interp_filter,
       default: return interp_filter;
     }
   }
+#else   // USE_EXTRA_FILTER
+  (void)plane;
+  return interp_filter;
+#endif  // USE_EXTRA_FILTER
 }
 #endif

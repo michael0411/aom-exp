@@ -24,12 +24,12 @@ using libaom_test::ACMRandom;
 
 typedef void (*ConvInit)();
 typedef void (*conv_filter_t)(const uint8_t *, int, uint8_t *, int, int, int,
-                              const InterpFilterParams, const int, int,
+                              const InterpFilterParams, int, int,
                               ConvolveParams *);
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 typedef void (*hbd_conv_filter_t)(const uint16_t *, int, uint16_t *, int, int,
-                                  int, const InterpFilterParams, const int, int,
-                                  int, int);
+                                  int, const InterpFilterParams, int, int, int,
+                                  int);
 #endif
 
 // Test parameter list:
@@ -39,7 +39,7 @@ typedef tuple<int, int> BlockDimension;
 typedef tuple<ConvInit, conv_filter_t, conv_filter_t, BlockDimension,
               InterpFilter, int, int>
     ConvParams;
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 // Test parameter list:
 //  <convolve_horiz_func, convolve_vert_func,
 //  <width, height>, filter_params, subpel_x_q4, avg, bit_dpeth>
@@ -74,7 +74,7 @@ class AV1ConvolveOptimzTest : public ::testing::TestWithParam<ConvParams> {
     subpel_ = GET_PARAM(5);
     int ref = GET_PARAM(6);
     const int plane = 0;
-    conv_params_ = get_conv_params(ref, plane);
+    conv_params_ = get_conv_params(ref, ref, plane);
 
     alloc_ = new uint8_t[maxBlockSize * 4];
     src_ = alloc_ + (vertiOffset * maxWidth);
@@ -218,7 +218,7 @@ const BlockDimension kBlockDim[] = {
 };
 
 // 10/12-tap filters
-const InterpFilter kFilter[] = { FILTER_REGULAR_UV, BILINEAR, MULTITAP_SHARP };
+const InterpFilter kFilter[] = { EIGHTTAP_REGULAR, BILINEAR, MULTITAP_SHARP };
 
 const int kSubpelQ4[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 
@@ -237,7 +237,7 @@ INSTANTIATE_TEST_CASE_P(
                        ::testing::ValuesIn(kAvg)));
 #endif  // HAVE_SSSE3 && CONFIG_DUAL_FILTER
 
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 typedef ::testing::TestWithParam<HbdConvParams> TestWithHbdConvParams;
 class AV1HbdConvolveOptimzTest : public TestWithHbdConvParams {
  public:
@@ -401,5 +401,5 @@ INSTANTIATE_TEST_CASE_P(
                        ::testing::ValuesIn(kAvg),
                        ::testing::ValuesIn(kBitdepth)));
 #endif  // HAVE_SSE4_1 && CONFIG_DUAL_FILTER
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
 }  // namespace

@@ -48,7 +48,14 @@ struct od_ec_dec {
   /*The read pointer for the entropy-coded bits.*/
   const unsigned char *bptr;
   /*The difference between the coded value and the low end of the current
-     range.*/
+     range.
+    {EC_SMALLMUL} The difference between the high end of the current range,
+     (low + rng), and the coded value, minus 1.
+    This stores up to OD_EC_WINDOW_SIZE bits of that difference, but the
+     decoder only uses the top 16 bits of the window to decode the next symbol.
+    As we shift up during renormalization, if we don't have enough bits left in
+     the window to fill the top 16, we'll read in more bits of the coded
+     value.*/
   od_ec_window dif;
   /*The number of values in the current range.*/
   uint16_t rng;
@@ -63,20 +70,11 @@ struct od_ec_dec {
 void od_ec_dec_init(od_ec_dec *dec, const unsigned char *buf, uint32_t storage)
     OD_ARG_NONNULL(1) OD_ARG_NONNULL(2);
 
-OD_WARN_UNUSED_RESULT int od_ec_decode_bool(od_ec_dec *dec, unsigned fz,
-                                            unsigned ft) OD_ARG_NONNULL(1);
-OD_WARN_UNUSED_RESULT int od_ec_decode_bool_q15(od_ec_dec *dec, unsigned fz)
+OD_WARN_UNUSED_RESULT int od_ec_decode_bool_q15(od_ec_dec *dec, unsigned f)
     OD_ARG_NONNULL(1);
-OD_WARN_UNUSED_RESULT int od_ec_decode_cdf(od_ec_dec *dec, const uint16_t *cdf,
-                                           int nsyms) OD_ARG_NONNULL(1)
-    OD_ARG_NONNULL(2);
 OD_WARN_UNUSED_RESULT int od_ec_decode_cdf_q15(od_ec_dec *dec,
                                                const uint16_t *cdf, int nsyms)
     OD_ARG_NONNULL(1) OD_ARG_NONNULL(2);
-OD_WARN_UNUSED_RESULT int od_ec_decode_cdf_unscaled(od_ec_dec *dec,
-                                                    const uint16_t *cdf,
-                                                    int nsyms) OD_ARG_NONNULL(1)
-    OD_ARG_NONNULL(2);
 
 OD_WARN_UNUSED_RESULT uint32_t od_ec_dec_bits_(od_ec_dec *dec, unsigned ftb)
     OD_ARG_NONNULL(1);

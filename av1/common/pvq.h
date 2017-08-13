@@ -121,11 +121,9 @@ typedef struct od_pvq_codeword_ctx od_pvq_codeword_ctx;
 
 struct od_pvq_codeword_ctx {
   int                 pvq_adapt[2*OD_TXSIZES*OD_NSB_ADAPT_CTXS];
-  int                 pvq_k1_increment;
   /* CDFs are size 16 despite the fact that we're using less than that. */
-  uint16_t            pvq_k1_cdf[12][16];
-  uint16_t            pvq_split_cdf[22*7][8];
-  int                 pvq_split_increment;
+  uint16_t            pvq_k1_cdf[12][CDF_SIZE(16)];
+  uint16_t            pvq_split_cdf[22*7][CDF_SIZE(8)];
 };
 
 struct od_pvq_adapt_ctx {
@@ -133,10 +131,8 @@ struct od_pvq_adapt_ctx {
   generic_encoder     pvq_param_model[3];
   int                 pvq_ext[OD_TXSIZES*PVQ_MAX_PARTITIONS];
   int                 pvq_exg[OD_NPLANES_MAX][OD_TXSIZES][PVQ_MAX_PARTITIONS];
-  int                 pvq_gaintheta_increment;
-  uint16_t        pvq_gaintheta_cdf[2*OD_TXSIZES*PVQ_MAX_PARTITIONS][16];
-  int                 pvq_skip_dir_increment;
-  uint16_t        pvq_skip_dir_cdf[2*(OD_TXSIZES-1)][7];
+  uint16_t pvq_gaintheta_cdf[2*OD_TXSIZES*PVQ_MAX_PARTITIONS][CDF_SIZE(16)];
+  uint16_t pvq_skip_dir_cdf[2*(OD_TXSIZES-1)][CDF_SIZE(7)];
 };
 
 typedef struct od_qm_entry {
@@ -179,8 +175,7 @@ od_val32 od_pvq_compute_gain(const od_val16 *x, int n, int q0, od_val32 *g,
  od_val16 beta, int bshift);
 int od_pvq_compute_max_theta(od_val32 qcg, od_val16 beta);
 od_val32 od_pvq_compute_theta(int t, int max_theta);
-int od_pvq_compute_k(od_val32 qcg, int itheta, od_val32 theta, int noref,
- int n, od_val16 beta, int nodesync);
+int od_pvq_compute_k(od_val32 qcg, int itheta, int noref, int n, od_val16 beta);
 
 int od_vector_is_null(const od_coeff *x, int len);
 int od_qm_offset(int bs, int xydec);

@@ -34,12 +34,11 @@ struct od_adapt_ctx {
   int ex_g[OD_NPLANES_MAX][OD_TXSIZES];
 
   /* Joint skip flag for DC and AC */
-  uint16_t skip_cdf[OD_TXSIZES*2][4];
-  int skip_increment;
+  uint16_t skip_cdf[OD_TXSIZES*2][CDF_SIZE(4)];
 };
 
 struct od_state {
-  od_adapt_ctx adapt;
+  od_adapt_ctx *adapt;
   unsigned char pvq_qm_q4[OD_NPLANES_MAX][OD_QM_SIZE];
   /* Quantization matrices and their inverses. */
   int16_t qm[OD_QM_BUFFER_SIZE];

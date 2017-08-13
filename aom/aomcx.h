@@ -327,17 +327,40 @@ enum aome_enc_control_id {
   AV1E_SET_TUNE_CONTENT,
 
   /*!\brief Codec control function to set color space info.
-   * \note Valid ranges: 0..7, default is "UNKNOWN".
+   * \note Valid ranges: 0..9, default is "UNKNOWN".
    *                     0 = UNKNOWN,
    *                     1 = BT_601
    *                     2 = BT_709
    *                     3 = SMPTE_170
    *                     4 = SMPTE_240
-   *                     5 = BT_2020
-   *                     6 = RESERVED
+   *                     5 = BT_2020_NCL
+   *                     6 = BT_2020_CL
    *                     7 = SRGB
+   *                     8 = ICtCp
+   *                     9 = RESERVED
    */
   AV1E_SET_COLOR_SPACE,
+
+#if CONFIG_COLORSPACE_HEADERS
+  /*!\brief Codec control function to set transfer function info.
+   * \note Valid ranges: 0..4, default is "UNKNOWN".
+   *                     0 = UNKNOWN,
+   *                     1 = BT_709
+   *                     2 = PQ
+   *                     3 = HLG
+   *                     4 = RESERVED
+   */
+  AV1E_SET_TRANSFER_FUNCTION,
+
+  /*!\brief Codec control function to set chroma 4:2:0 sample position info.
+   * \note Valid ranges: 0..3, default is "UNKNOWN".
+   *                     0 = UNKNOWN,
+   *                     1 = VERTICAL
+   *                     2 = COLOCATED
+   *                     3 = RESERVED
+   */
+  AV1E_SET_CHROMA_SAMPLE_POSITION,
+#endif
 
   /*!\brief Codec control function to set minimum interval between GF/ARF frames
    *
@@ -502,6 +525,35 @@ enum aome_enc_control_id {
    * Experiment: LOOPFILTERING_ACROSS_TILES
    */
   AV1E_SET_TILE_LOOPFILTER,
+
+  /*!\brief Codec control function to set the delta q mode
+  *
+  * AV1 has a segment based feature that allows encoder to adaptively change
+  * quantization parameter for each segment within a frame to improve the
+  * subjective quality. the delta q mode is added on top of segment based
+  * feature, and allows control per 64x64 q and lf delta.This control makes
+  * encoder operate in one of the several DELTA_Q_modes supported.
+  *
+  * By default, encoder operates with DELTAQ_Mode 0(deltaq signaling off).
+  */
+  AV1E_SET_DELTAQ_MODE,
+
+  /*!\brief Codec control function to set the single tile decoding mode to 0 or
+   * 1.
+   *
+   * 0 means that the single tile decoding is off, and 1 means that the single
+   * tile decoding is on.
+   *
+   * Experiment: EXT_TILE
+   */
+  AV1E_SET_SINGLE_TILE_DECODING,
+
+  /*!\brief Codec control function to enable the extreme motion vector unit test
+   * in AV1. Please note that this is only used in motion vector unit test.
+   *
+   * 0 : off, 1 : MAX_EXTREME_MV, 2 : MIN_EXTREME_MV
+   */
+  AV1E_ENABLE_MOTION_VECTOR_UNIT_TEST,
 };
 
 /*!\brief aom 1-D scaling mode
@@ -661,6 +713,9 @@ AOM_CTRL_USE_TYPE(AV1E_SET_FRAME_PARALLEL_DECODING, unsigned int)
 AOM_CTRL_USE_TYPE(AV1E_SET_AQ_MODE, unsigned int)
 #define AOM_CTRL_AV1E_SET_AQ_MODE
 
+AOM_CTRL_USE_TYPE(AV1E_SET_DELTAQ_MODE, unsigned int)
+#define AOM_CTRL_AV1E_SET_DELTAQ_MODE
+
 AOM_CTRL_USE_TYPE(AV1E_SET_FRAME_PERIODIC_BOOST, unsigned int)
 #define AOM_CTRL_AV1E_SET_FRAME_PERIODIC_BOOST
 
@@ -672,6 +727,14 @@ AOM_CTRL_USE_TYPE(AV1E_SET_TUNE_CONTENT, int) /* aom_tune_content */
 
 AOM_CTRL_USE_TYPE(AV1E_SET_COLOR_SPACE, int)
 #define AOM_CTRL_AV1E_SET_COLOR_SPACE
+
+#if CONFIG_COLORSPACE_HEADERS
+AOM_CTRL_USE_TYPE(AV1E_SET_TRANSFER_FUNCTION, int)
+#define AOM_CTRL_AV1E_SET_TRANSFER_FUNCTION
+
+AOM_CTRL_USE_TYPE(AV1E_SET_CHROMA_SAMPLE_POSITION, int)
+#define AOM_CTRL_AV1E_SET_CHROMA_SAMPLE_POSITION
+#endif
 
 AOM_CTRL_USE_TYPE(AV1E_SET_MIN_GF_INTERVAL, unsigned int)
 #define AOM_CTRL_AV1E_SET_MIN_GF_INTERVAL
@@ -703,6 +766,13 @@ AOM_CTRL_USE_TYPE(AV1E_GET_LEVEL, int *)
 
 AOM_CTRL_USE_TYPE(AV1E_SET_ANS_WINDOW_SIZE_LOG2, unsigned int)
 #define AOM_CTRL_AV1E_SET_ANS_WINDOW_SIZE_LOG2
+
+AOM_CTRL_USE_TYPE(AV1E_SET_SINGLE_TILE_DECODING, unsigned int)
+#define AOM_CTRL_AV1E_SET_SINGLE_TILE_DECODING
+
+AOM_CTRL_USE_TYPE(AV1E_ENABLE_MOTION_VECTOR_UNIT_TEST, unsigned int)
+#define AOM_CTRL_AV1E_ENABLE_MOTION_VECTOR_UNIT_TEST
+
 /*!\endcond */
 /*! @} - end defgroup aom_encoder */
 #ifdef __cplusplus

@@ -17,9 +17,7 @@
 #if CONFIG_PVQ
 #include "av1/encoder/encint.h"
 #endif
-#if CONFIG_REF_MV
 #include "av1/common/mvref_common.h"
-#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,6 +43,9 @@ typedef struct macroblock_plane {
   tran_low_t *qcoeff;
   tran_low_t *coeff;
   uint16_t *eobs;
+#if CONFIG_LV_MAP
+  uint8_t *txb_entropy_ctx;
+#endif
   struct buf_2d src;
 
   // Quantizer setings
@@ -59,10 +60,19 @@ typedef struct macroblock_plane {
 #endif  // CONFIG_NEW_QUANT
 } MACROBLOCK_PLANE;
 
-/* The [2] dimension is for whether we skip the EOB node (i.e. if previous
- * coefficient in this block was zero) or not. */
-typedef unsigned int av1_coeff_cost[PLANE_TYPES][REF_TYPES][COEF_BANDS][2]
-                                   [COEFF_CONTEXTS][ENTROPY_TOKENS];
+typedef int av1_coeff_cost[PLANE_TYPES][REF_TYPES][COEF_BANDS][COEFF_CONTEXTS]
+                          [TAIL_TOKENS];
+
+#if CONFIG_LV_MAP
+typedef struct {
+  int txb_skip_cost[TXB_SKIP_CONTEXTS][2];
+  int nz_map_cost[SIG_COEF_CONTEXTS][2];
+  int eob_cost[EOB_COEF_CONTEXTS][2];
+  int dc_sign_cost[DC_SIGN_CONTEXTS][2];
+  int base_cost[NUM_BASE_LEVELS][COEFF_BASE_CONTEXTS][2];
+  int lps_cost[LEVEL_CONTEXTS][2];
+} LV_MAP_COEFF_COST;
+#endif
 
 typedef struct {
   int_mv ref_mvs[MODE_CTX_REF_FRAMES][MAX_MV_REF_CANDIDATES];
@@ -76,21 +86,24 @@ typedef struct {
   int dc_sign_ctx[MAX_MB_PLANE]
                  [MAX_SB_SQUARE / (TX_SIZE_W_MIN * TX_SIZE_H_MIN)];
 #endif
-#if CONFIG_REF_MV
   uint8_t ref_mv_count[MODE_CTX_REF_FRAMES];
   CANDIDATE_MV ref_mv_stack[MODE_CTX_REF_FRAMES][MAX_REF_MV_STACK_SIZE];
 #if CONFIG_EXT_INTER
   int16_t compound_mode_context[MODE_CTX_REF_FRAMES];
 #endif  // CONFIG_EXT_INTER
-#endif
 } MB_MODE_INFO_EXT;
 
-#if CONFIG_PALETTE
+typedef struct {
+  int col_min;
+  int col_max;
+  int row_min;
+  int row_max;
+} MvLimits;
+
 typedef struct {
   uint8_t best_palette_color_map[MAX_SB_SQUARE];
   float kmeans_data_buf[2 * MAX_SB_SQUARE];
 } PALETTE_BUFFER;
-#endif  // CONFIG_PALETTE
 
 typedef struct macroblock MACROBLOCK;
 struct macroblock {
@@ -110,7 +123,6 @@ struct macroblock {
   // The equivalend SAD error of one (whole) bit at the current quantizer
   // for sub-8x8 blocks.
   int sadperbit4;
-  int rddiv;
   int rdmult;
   int mb_energy;
   int *m_search_count_ptr;
@@ -131,45 +143,29 @@ struct macroblock {
   unsigned int pred_sse[TOTAL_REFS_PER_FRAME];
   int pred_mv_sad[TOTAL_REFS_PER_FRAME];
 
-#if CONFIG_REF_MV
   int *nmvjointcost;
   int nmv_vec_cost[NMV_CONTEXTS][MV_JOINTS];
   int *nmvcost[NMV_CONTEXTS][2];
   int *nmvcost_hp[NMV_CONTEXTS][2];
   int **mv_cost_stack[NMV_CONTEXTS];
-  int *nmvjointsadcost;
-#else
-  int nmvjointcost[MV_JOINTS];
-  int *nmvcost[2];
-  int *nmvcost_hp[2];
-  int nmvjointsadcost[MV_JOINTS];
-#endif
-
   int **mvcost;
-  int *nmvsadcost[2];
-  int *nmvsadcost_hp[2];
-  int **mvsadcost;
+
 #if CONFIG_MOTION_VAR
   int32_t *wsrc_buf;
   int32_t *mask_buf;
+  uint8_t *above_pred_buf;
+  uint8_t *left_pred_buf;
 #endif  // CONFIG_MOTION_VAR
 
-#if CONFIG_PALETTE
   PALETTE_BUFFER *palette_buffer;
-#endif  // CONFIG_PALETTE
 
   // These define limits to motion vector components to prevent them
   // from extending outside the UMV borders
-  int mv_col_min;
-  int mv_col_max;
-  int mv_row_min;
-  int mv_row_max;
+  MvLimits mv_limits;
 
 #if CONFIG_VAR_TX
   uint8_t blk_skip[MAX_MB_PLANE][MAX_MIB_SIZE * MAX_MIB_SIZE * 8];
-#if CONFIG_REF_MV
   uint8_t blk_skip_drl[MAX_MB_PLANE][MAX_MIB_SIZE * MAX_MIB_SIZE * 8];
-#endif
 #endif
 
   int skip;
@@ -178,8 +174,72 @@ struct macroblock {
   int skip_chroma_rd;
 #endif
 
-  // note that token_costs is the cost when eob node is skipped
-  av1_coeff_cost token_costs[TX_SIZES];
+#if CONFIG_LV_MAP
+  LV_MAP_COEFF_COST coeff_costs[TX_SIZES][PLANE_TYPES];
+#endif
+
+  av1_coeff_cost token_head_costs[TX_SIZES];
+  av1_coeff_cost token_tail_costs[TX_SIZES];
+
+  // mode costs
+  int mbmode_cost[BLOCK_SIZE_GROUPS][INTRA_MODES];
+  int newmv_mode_cost[NEWMV_MODE_CONTEXTS][2];
+  int zeromv_mode_cost[ZEROMV_MODE_CONTEXTS][2];
+  int refmv_mode_cost[REFMV_MODE_CONTEXTS][2];
+  int drl_mode_cost0[DRL_MODE_CONTEXTS][2];
+
+#if CONFIG_EXT_INTER
+  int inter_compound_mode_cost[INTER_MODE_CONTEXTS][INTER_COMPOUND_MODES];
+#if CONFIG_COMPOUND_SINGLEREF
+  int inter_singleref_comp_mode_cost[INTER_MODE_CONTEXTS]
+                                    [INTER_SINGLEREF_COMP_MODES];
+#endif  // CONFIG_COMPOUND_SINGLEREF
+#if CONFIG_INTERINTRA
+  int interintra_mode_cost[BLOCK_SIZE_GROUPS][INTERINTRA_MODES];
+#endif  // CONFIG_INTERINTRA
+#endif  // CONFIG_EXT_INTER
+#if CONFIG_MOTION_VAR || CONFIG_WARPED_MOTION
+  int motion_mode_cost[BLOCK_SIZES_ALL][MOTION_MODES];
+#if CONFIG_MOTION_VAR && CONFIG_WARPED_MOTION
+  int motion_mode_cost1[BLOCK_SIZES_ALL][2];
+#endif  // CONFIG_MOTION_VAR && CONFIG_WARPED_MOTION
+#if CONFIG_MOTION_VAR && CONFIG_NCOBMC_ADAPT_WEIGHT
+  int ncobmc_mode_cost[ADAPT_OVERLAP_BLOCKS][MAX_NCOBMC_MODES];
+#endif  // CONFIG_MOTION_VAR && CONFIG_NCOBMC_ADAPT_WEIGHT
+#endif  // CONFIG_MOTION_VAR || CONFIG_WARPED_MOTION
+  int intra_uv_mode_cost[INTRA_MODES][UV_INTRA_MODES];
+  int y_mode_costs[INTRA_MODES][INTRA_MODES][INTRA_MODES];
+  int switchable_interp_costs[SWITCHABLE_FILTER_CONTEXTS][SWITCHABLE_FILTERS];
+#if CONFIG_EXT_PARTITION_TYPES
+  int partition_cost[PARTITION_CONTEXTS + CONFIG_UNPOISON_PARTITION_CTX]
+                    [EXT_PARTITION_TYPES];
+#else
+  int partition_cost[PARTITION_CONTEXTS + CONFIG_UNPOISON_PARTITION_CTX]
+                    [PARTITION_TYPES];
+#endif  // CONFIG_EXT_PARTITION_TYPES
+  int palette_y_size_cost[PALETTE_BLOCK_SIZES][PALETTE_SIZES];
+  int palette_uv_size_cost[PALETTE_BLOCK_SIZES][PALETTE_SIZES];
+  int palette_y_color_cost[PALETTE_SIZES][PALETTE_COLOR_INDEX_CONTEXTS]
+                          [PALETTE_COLORS];
+  int palette_uv_color_cost[PALETTE_SIZES][PALETTE_COLOR_INDEX_CONTEXTS]
+                           [PALETTE_COLORS];
+  int tx_size_cost[TX_SIZES - 1][TX_SIZE_CONTEXTS][TX_SIZES];
+#if CONFIG_EXT_TX
+  int inter_tx_type_costs[EXT_TX_SETS_INTER][EXT_TX_SIZES][TX_TYPES];
+  int intra_tx_type_costs[EXT_TX_SETS_INTRA][EXT_TX_SIZES][INTRA_MODES]
+                         [TX_TYPES];
+#else
+  int intra_tx_type_costs[EXT_TX_SIZES][TX_TYPES][TX_TYPES];
+  int inter_tx_type_costs[EXT_TX_SIZES][TX_TYPES];
+#endif  // CONFIG_EXT_TX
+#if CONFIG_EXT_INTRA
+#if CONFIG_INTRA_INTERP
+  int intra_filter_cost[INTRA_FILTERS + 1][INTRA_FILTERS];
+#endif  // CONFIG_INTRA_INTERP
+#endif  // CONFIG_EXT_INTRA
+#if CONFIG_LOOP_RESTORATION
+  int switchable_restore_cost[RESTORE_SWITCHABLE_TYPES];
+#endif  // CONFIG_LOOP_RESTORATION
 
   int optimize;
 
@@ -214,35 +274,20 @@ struct macroblock {
   int pvq_speed;
   int pvq_coded;  // Indicates whether pvq_info needs be stored to tokenize
 #endif
-#if CONFIG_DAALA_DIST
-  // Keep rate of each 4x4 block in the current macroblock during RDO
-  // This is needed when using the 8x8 Daala distortion metric during RDO,
-  // because it evaluates distortion in a different order than the underlying
-  // 4x4 blocks are coded.
-  int rate_4x4[256];
+#if CONFIG_DIST_8X8
+#if CONFIG_CB4X4
+#if CONFIG_HIGHBITDEPTH
+  DECLARE_ALIGNED(16, uint16_t, decoded_8x8[8 * 8]);
+#else
+  DECLARE_ALIGNED(16, uint8_t, decoded_8x8[8 * 8]);
+#endif
+#endif  // CONFIG_CB4X4
+#endif  // CONFIG_DIST_8X8
+#if CONFIG_CFL
+  // Whether luma needs to be stored during RDO.
+  int cfl_store_y;
 #endif
 };
-
-// Converts block_index for given transform size to index of the block in raster
-// order.
-static INLINE int av1_block_index_to_raster_order(TX_SIZE tx_size,
-                                                  int block_idx) {
-  // For transform size 4x8, the possible block_idx values are 0 & 2, because
-  // block_idx values are incremented in steps of size 'tx_width_unit x
-  // tx_height_unit'. But, for this transform size, block_idx = 2 corresponds to
-  // block number 1 in raster order, inside an 8x8 MI block.
-  // For any other transform size, the two indices are equivalent.
-  return (tx_size == TX_4X8 && block_idx == 2) ? 1 : block_idx;
-}
-
-// Inverse of above function.
-// Note: only implemented for transform sizes 4x4, 4x8 and 8x4 right now.
-static INLINE int av1_raster_order_to_block_index(TX_SIZE tx_size,
-                                                  int raster_order) {
-  assert(tx_size == TX_4X4 || tx_size == TX_4X8 || tx_size == TX_8X4);
-  // We ensure that block indices are 0 & 2 if tx size is 4x8 or 8x4.
-  return (tx_size == TX_4X4) ? raster_order : (raster_order > 0) ? 2 : 0;
-}
 
 #ifdef __cplusplus
 }  // extern "C"

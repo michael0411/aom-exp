@@ -36,13 +36,18 @@ extern "C" {
 #define MAX_EXT_SIZE 135
 #endif  // CONFIG_AV1 && CONFIG_EXT_PARTITION
 
+#if CONFIG_AV1 && CONFIG_LOOP_RESTORATION
+#define EXTRAPREC_BITS 2
+#define EXTRAPREC_CLAMP_LIMIT(bd) (1 << ((bd) + 1 + EXTRAPREC_BITS))
+#endif
+
 typedef void (*convolve_fn_t)(const uint8_t *src, ptrdiff_t src_stride,
                               uint8_t *dst, ptrdiff_t dst_stride,
                               const int16_t *filter_x, int x_step_q4,
                               const int16_t *filter_y, int y_step_q4, int w,
                               int h);
 
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 typedef void (*highbd_convolve_fn_t)(const uint8_t *src, ptrdiff_t src_stride,
                                      uint8_t *dst, ptrdiff_t dst_stride,
                                      const int16_t *filter_x, int x_step_q4,

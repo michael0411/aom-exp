@@ -25,20 +25,22 @@ using libaom_test::ACMRandom;
 
 namespace {
 typedef void (*IhtFunc)(const tran_low_t *in, uint8_t *out, int stride,
-                        int tx_type);
+                        const TxfmParam *txfm_param);
 using std::tr1::tuple;
 using libaom_test::FhtFunc;
 typedef tuple<FhtFunc, IhtFunc, int, aom_bit_depth_t, int> Ht4x4Param;
 
-void fht4x4_ref(const int16_t *in, tran_low_t *out, int stride, int tx_type) {
-  av1_fht4x4_c(in, out, stride, tx_type);
+void fht4x4_ref(const int16_t *in, tran_low_t *out, int stride,
+                TxfmParam *txfm_param) {
+  av1_fht4x4_c(in, out, stride, txfm_param);
 }
 
-void iht4x4_ref(const tran_low_t *in, uint8_t *out, int stride, int tx_type) {
-  av1_iht4x4_16_add_c(in, out, stride, tx_type);
+void iht4x4_ref(const tran_low_t *in, uint8_t *out, int stride,
+                const TxfmParam *txfm_param) {
+  av1_iht4x4_16_add_c(in, out, stride, txfm_param);
 }
 
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 typedef void (*IhighbdHtFunc)(const tran_low_t *in, uint8_t *out, int stride,
                               int tx_type, int bd);
 typedef void (*HBDFhtFunc)(const int16_t *input, int32_t *output, int stride,
@@ -52,7 +54,7 @@ void highbe_fht4x4_ref(const int16_t *in, int32_t *out, int stride, int tx_type,
                        int bd) {
   av1_fwd_txfm2d_4x4_c(in, out, stride, tx_type, bd);
 }
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
 
 class AV1Trans4x4HT : public libaom_test::TransformTestBase,
                       public ::testing::TestWithParam<Ht4x4Param> {
@@ -62,7 +64,6 @@ class AV1Trans4x4HT : public libaom_test::TransformTestBase,
   virtual void SetUp() {
     fwd_txfm_ = GET_PARAM(0);
     inv_txfm_ = GET_PARAM(1);
-    tx_type_ = GET_PARAM(2);
     pitch_ = 4;
     height_ = 4;
     fwd_txfm_ref = fht4x4_ref;
@@ -70,16 +71,17 @@ class AV1Trans4x4HT : public libaom_test::TransformTestBase,
     bit_depth_ = GET_PARAM(3);
     mask_ = (1 << bit_depth_) - 1;
     num_coeffs_ = GET_PARAM(4);
+    txfm_param_.tx_type = GET_PARAM(2);
   }
   virtual void TearDown() { libaom_test::ClearSystemState(); }
 
  protected:
   void RunFwdTxfm(const int16_t *in, tran_low_t *out, int stride) {
-    fwd_txfm_(in, out, stride, tx_type_);
+    fwd_txfm_(in, out, stride, &txfm_param_);
   }
 
   void RunInvTxfm(const tran_low_t *out, uint8_t *dst, int stride) {
-    inv_txfm_(out, dst, stride, tx_type_);
+    inv_txfm_(out, dst, stride, &txfm_param_);
   }
 
   FhtFunc fwd_txfm_;
@@ -95,7 +97,7 @@ TEST_P(AV1Trans4x4HT, CoeffCheck) { RunCoeffCheck(); }
 // TEST_P(AV1Trans4x4HT, InvAccuracyCheck) { RunInvAccuracyCheck(0); }
 // TEST_P(AV1Trans4x4HT, InvCoeffCheck) { RunInvCoeffCheck(); }
 
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 class AV1HighbdTrans4x4HT : public ::testing::TestWithParam<HighbdHt4x4Param> {
  public:
   virtual ~AV1HighbdTrans4x4HT() {}
@@ -161,11 +163,11 @@ void AV1HighbdTrans4x4HT::RunBitexactCheck() {
 }
 
 TEST_P(AV1HighbdTrans4x4HT, HighbdCoeffCheck) { RunBitexactCheck(); }
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
 
 using std::tr1::make_tuple;
 
-#if HAVE_SSE2 && !CONFIG_EMULATE_HARDWARE
+#if HAVE_SSE2
 const Ht4x4Param kArrayHt4x4Param_sse2[] = {
   make_tuple(&av1_fht4x4_sse2, &av1_iht4x4_16_add_sse2, 0, AOM_BITS_8, 16),
   make_tuple(&av1_fht4x4_sse2, &av1_iht4x4_16_add_sse2, 1, AOM_BITS_8, 16),
@@ -177,6 +179,7 @@ const Ht4x4Param kArrayHt4x4Param_sse2[] = {
   make_tuple(&av1_fht4x4_sse2, &av1_iht4x4_16_add_sse2, 6, AOM_BITS_8, 16),
   make_tuple(&av1_fht4x4_sse2, &av1_iht4x4_16_add_sse2, 7, AOM_BITS_8, 16),
   make_tuple(&av1_fht4x4_sse2, &av1_iht4x4_16_add_sse2, 8, AOM_BITS_8, 16),
+  make_tuple(&av1_fht4x4_sse2, &av1_iht4x4_16_add_sse2, 9, AOM_BITS_8, 16),
   make_tuple(&av1_fht4x4_sse2, &av1_iht4x4_16_add_sse2, 10, AOM_BITS_8, 16),
   make_tuple(&av1_fht4x4_sse2, &av1_iht4x4_16_add_sse2, 11, AOM_BITS_8, 16),
   make_tuple(&av1_fht4x4_sse2, &av1_iht4x4_16_add_sse2, 12, AOM_BITS_8, 16),
@@ -187,9 +190,9 @@ const Ht4x4Param kArrayHt4x4Param_sse2[] = {
 };
 INSTANTIATE_TEST_CASE_P(SSE2, AV1Trans4x4HT,
                         ::testing::ValuesIn(kArrayHt4x4Param_sse2));
-#endif  // HAVE_SSE2 && !CONFIG_EMULATE_HARDWARE
+#endif  // HAVE_SSE2
 
-#if HAVE_SSE4_1 && CONFIG_AOM_HIGHBITDEPTH && !CONFIG_EMULATE_HARDWARE
+#if HAVE_SSE4_1 && CONFIG_HIGHBITDEPTH
 const HighbdHt4x4Param kArrayHighbdHt4x4Param[] = {
   make_tuple(&av1_fwd_txfm2d_4x4_sse4_1, 0, 10),
   make_tuple(&av1_fwd_txfm2d_4x4_sse4_1, 0, 12),
@@ -216,6 +219,6 @@ const HighbdHt4x4Param kArrayHighbdHt4x4Param[] = {
 INSTANTIATE_TEST_CASE_P(SSE4_1, AV1HighbdTrans4x4HT,
                         ::testing::ValuesIn(kArrayHighbdHt4x4Param));
 
-#endif  // HAVE_SSE4_1 && CONFIG_AOM_HIGHBITDEPTH && !CONFIG_EMULATE_HARDWARE
+#endif  // HAVE_SSE4_1 && CONFIG_HIGHBITDEPTH
 
 }  // namespace

@@ -199,12 +199,20 @@ SIMD_INLINE v256 v256_ssub_s16(v256 a, v256 b) {
   return v256_from_v128(v128_ssub_s16(a.hi, b.hi), v128_ssub_s16(a.lo, b.lo));
 }
 
+SIMD_INLINE v256 v256_ssub_u16(v256 a, v256 b) {
+  return v256_from_v128(v128_ssub_u16(a.hi, b.hi), v128_ssub_u16(a.lo, b.lo));
+}
+
 SIMD_INLINE v256 v256_sub_32(v256 a, v256 b) {
   return v256_from_v128(v128_sub_32(a.hi, b.hi), v128_sub_32(a.lo, b.lo));
 }
 
 SIMD_INLINE v256 v256_abs_s16(v256 a) {
   return v256_from_v128(v128_abs_s16(a.hi), v128_abs_s16(a.lo));
+}
+
+SIMD_INLINE v256 v256_abs_s8(v256 a) {
+  return v256_from_v128(v128_abs_s8(a.hi), v128_abs_s8(a.lo));
 }
 
 SIMD_INLINE v256 v256_mul_s16(v128 a, v128 b) {
@@ -362,6 +370,18 @@ SIMD_INLINE v256 v256_unpackhi_u8_s16(v256 a) {
   return v256_from_v128(v128_unpackhi_u8_s16(a.hi), v128_unpacklo_u8_s16(a.hi));
 }
 
+SIMD_INLINE v256 v256_unpack_s8_s16(v128 a) {
+  return v256_from_v128(v128_unpackhi_s8_s16(a), v128_unpacklo_s8_s16(a));
+}
+
+SIMD_INLINE v256 v256_unpacklo_s8_s16(v256 a) {
+  return v256_from_v128(v128_unpackhi_s8_s16(a.lo), v128_unpacklo_s8_s16(a.lo));
+}
+
+SIMD_INLINE v256 v256_unpackhi_s8_s16(v256 a) {
+  return v256_from_v128(v128_unpackhi_s8_s16(a.hi), v128_unpacklo_s8_s16(a.hi));
+}
+
 SIMD_INLINE v256 v256_pack_s32_s16(v256 a, v256 b) {
   return v256_from_v128(v128_pack_s32_s16(a.hi, a.lo),
                         v128_pack_s32_s16(b.hi, b.lo));
@@ -448,39 +468,39 @@ SIMD_INLINE v256 v256_cmpeq_16(v256 a, v256 b) {
   return v256_from_v128(v128_cmpeq_16(a.hi, b.hi), v128_cmpeq_16(a.lo, b.lo));
 }
 
-SIMD_INLINE v256 v256_shl_8(v256 a, const unsigned int c) {
+SIMD_INLINE v256 v256_shl_8(v256 a, unsigned int c) {
   return v256_from_v128(v128_shl_8(a.hi, c), v128_shl_8(a.lo, c));
 }
 
-SIMD_INLINE v256 v256_shr_u8(v256 a, const unsigned int c) {
+SIMD_INLINE v256 v256_shr_u8(v256 a, unsigned int c) {
   return v256_from_v128(v128_shr_u8(a.hi, c), v128_shr_u8(a.lo, c));
 }
 
-SIMD_INLINE v256 v256_shr_s8(v256 a, const unsigned int c) {
+SIMD_INLINE v256 v256_shr_s8(v256 a, unsigned int c) {
   return v256_from_v128(v128_shr_s8(a.hi, c), v128_shr_s8(a.lo, c));
 }
 
-SIMD_INLINE v256 v256_shl_16(v256 a, const unsigned int c) {
+SIMD_INLINE v256 v256_shl_16(v256 a, unsigned int c) {
   return v256_from_v128(v128_shl_16(a.hi, c), v128_shl_16(a.lo, c));
 }
 
-SIMD_INLINE v256 v256_shr_u16(v256 a, const unsigned int c) {
+SIMD_INLINE v256 v256_shr_u16(v256 a, unsigned int c) {
   return v256_from_v128(v128_shr_u16(a.hi, c), v128_shr_u16(a.lo, c));
 }
 
-SIMD_INLINE v256 v256_shr_s16(v256 a, const unsigned int c) {
+SIMD_INLINE v256 v256_shr_s16(v256 a, unsigned int c) {
   return v256_from_v128(v128_shr_s16(a.hi, c), v128_shr_s16(a.lo, c));
 }
 
-SIMD_INLINE v256 v256_shl_32(v256 a, const unsigned int c) {
+SIMD_INLINE v256 v256_shl_32(v256 a, unsigned int c) {
   return v256_from_v128(v128_shl_32(a.hi, c), v128_shl_32(a.lo, c));
 }
 
-SIMD_INLINE v256 v256_shr_u32(v256 a, const unsigned int c) {
+SIMD_INLINE v256 v256_shr_u32(v256 a, unsigned int c) {
   return v256_from_v128(v128_shr_u32(a.hi, c), v128_shr_u32(a.lo, c));
 }
 
-SIMD_INLINE v256 v256_shr_s32(v256 a, const unsigned int c) {
+SIMD_INLINE v256 v256_shr_s32(v256 a, unsigned int c) {
   return v256_from_v128(v128_shr_s32(a.hi, c), v128_shr_s32(a.lo, c));
 }
 
@@ -488,17 +508,19 @@ SIMD_INLINE v256 v256_shr_s32(v256 a, const unsigned int c) {
    to enforce that. */
 #define v256_shl_n_byte(a, n)                                                 \
   ((n) < 16 ? v256_from_v128(v128_or(v128_shl_n_byte(a.hi, n),                \
-                                     v128_shr_n_byte(a.lo, 16 - (n))),        \
+                                     v128_shr_n_byte(a.lo, (16 - (n)) & 31)), \
                              v128_shl_n_byte(a.lo, (n)))                      \
-            : v256_from_v128((n) > 16 ? v128_shl_n_byte(a.lo, (n)-16) : a.lo, \
-                             v128_zero()))
+            : v256_from_v128(                                                 \
+                  (n) > 16 ? v128_shl_n_byte(a.lo, ((n)-16) & 31) : a.lo,     \
+                  v128_zero()))
 
-#define v256_shr_n_byte(a, n)                                          \
-  ((n) < 16 ? v256_from_v128(v128_shr_n_byte(a.hi, n),                 \
-                             v128_or(v128_shr_n_byte(a.lo, n),         \
-                                     v128_shl_n_byte(a.hi, 16 - (n)))) \
-            : v256_from_v128(v128_zero(),                              \
-                             (n) > 16 ? v128_shr_n_byte(a.hi, (n)-16) : a.hi))
+#define v256_shr_n_byte(a, n)                                                 \
+  ((n) < 16 ? v256_from_v128(v128_shr_n_byte(a.hi, n),                        \
+                             v128_or(v128_shr_n_byte(a.lo, n),                \
+                                     v128_shl_n_byte(a.hi, (16 - (n)) & 31))) \
+            : v256_from_v128(                                                 \
+                  v128_zero(),                                                \
+                  (n) > 16 ? v128_shr_n_byte(a.hi, ((n)-16) & 31) : a.hi))
 
 #define v256_align(a, b, c) \
   ((c) ? v256_or(v256_shr_n_byte(b, c), v256_shl_n_byte(a, 32 - (c))) : b)

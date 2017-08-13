@@ -8,10 +8,16 @@
 ## Media Patent License 1.0 was not distributed with this source code in the
 ## PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 ##
+if (NOT AOM_BUILD_CMAKE_AOM_CONFIGURE_CMAKE_)
+set(AOM_BUILD_CMAKE_AOM_CONFIGURE_CMAKE_ 1)
+
 include(FindGit)
 include(FindPerl)
 include(FindThreads)
 include(FindwxWidgets)
+
+set(AOM_SUPPORTED_CPU_TARGETS
+    "arm64 armv7 armv7s generic mips32 mips64 x86 x86_64")
 
 # Generate the user config settings. This must occur before include of
 # aom_config_defaults.cmake (because it turns every config variable into a cache
@@ -57,7 +63,8 @@ if (NOT AOM_TARGET_CPU)
   elseif ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "i386" OR
           "${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86")
     set(AOM_TARGET_CPU "x86")
-  elseif ("${CMAKE_SYSTEM_PROCESSOR}" MATCHES "^arm")
+  elseif ("${CMAKE_SYSTEM_PROCESSOR}" MATCHES "^arm" OR
+          "${CMAKE_SYSTEM_PROCESSOR}" MATCHES "^mips")
     set(AOM_TARGET_CPU "${CMAKE_SYSTEM_PROCESSOR}")
   endif ()
 endif ()
@@ -76,19 +83,49 @@ string(STRIP "${AOM_CMAKE_CONFIG}" AOM_CMAKE_CONFIG)
 message("--- aom_configure: Detected CPU: ${AOM_TARGET_CPU}")
 set(AOM_TARGET_SYSTEM ${CMAKE_SYSTEM_NAME})
 
-if (NOT EXISTS "${AOM_ROOT}/build/cmake/targets/${AOM_TARGET_CPU}.cmake")
-  message(FATAL_ERROR "No RTCD template for ${AOM_TARGET_CPU}. Create one, or "
+if ("${CMAKE_BUILD_TYPE}" MATCHES "Deb")
+  set(CONFIG_DEBUG 1)
+endif ()
+
+if (NOT MSVC)
+  if (BUILD_SHARED_LIBS)
+    set(CONFIG_PIC 1)
+    set(CONFIG_SHARED 1)
+    set(CONFIG_STATIC 0)
+  endif ()
+
+  if (CONFIG_PIC)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+    if ("${AOM_TARGET_SYSTEM}" STREQUAL "Linux" AND
+        "${AOM_TARGET_CPU}" MATCHES "^armv7")
+      set(AOM_AS_FLAGS ${AOM_AS_FLAGS} --defsym PIC=1)
+    else ()
+      set(AOM_AS_FLAGS ${AOM_AS_FLAGS} -DPIC)
+    endif ()
+  endif ()
+else ()
+  set(CONFIG_MSVS 1)
+endif ()
+
+if (NOT "${AOM_SUPPORTED_CPU_TARGETS}" MATCHES "${AOM_TARGET_CPU}")
+  message(FATAL_ERROR "No RTCD support for ${AOM_TARGET_CPU}. Create it, or "
           "add -DAOM_TARGET_CPU=generic to your cmake command line for a "
           "generic build of libaom and tools.")
 endif ()
 
 if ("${AOM_TARGET_CPU}" STREQUAL "x86" OR "${AOM_TARGET_CPU}" STREQUAL "x86_64")
-  # TODO(tomfinegan): Support nasm at least as well as the existing build
-  # system.
-  find_program(AS_EXECUTABLE yasm $ENV{YASM_PATH})
+  if (ENABLE_NASM)
+    find_program(AS_EXECUTABLE nasm $ENV{NASM_PATH})
+    test_nasm()
+    set(AOM_AS_FLAGS ${AOM_AS_FLAGS} -Ox)
+  else ()
+    find_program(AS_EXECUTABLE yasm $ENV{YASM_PATH})
+  endif ()
+
   if (NOT AS_EXECUTABLE)
-    message(FATAL_ERROR "Unable to find yasm. To build without optimizations, "
-            "add -DAOM_TARGET_CPU=generic to your cmake command line.")
+    message(FATAL_ERROR "Unable to find assembler. To build without "
+            "optimizations, add -DAOM_TARGET_CPU=generic to your cmake command "
+            "line.")
   endif ()
   get_asm_obj_format("objformat")
   set(AOM_AS_FLAGS -f ${objformat} ${AOM_AS_FLAGS})
@@ -97,6 +134,9 @@ elseif ("${AOM_TARGET_CPU}" MATCHES "arm")
   if ("${AOM_TARGET_SYSTEM}" STREQUAL "Darwin")
     set(AS_EXECUTABLE as)
     set(AOM_AS_FLAGS -arch ${AOM_TARGET_CPU} -isysroot ${CMAKE_OSX_SYSROOT})
+  elseif ("${AOM_TARGET_SYSTEM}" STREQUAL "Linux")
+    # arm linux assembler settings controlled by
+    # build/cmake/toolchains/arm*-linux*.cmake
   endif ()
   if (NOT AS_EXECUTABLE)
     message(FATAL_ERROR
@@ -106,7 +146,31 @@ elseif ("${AOM_TARGET_CPU}" MATCHES "arm")
   string(STRIP "${AOM_AS_FLAGS}" AOM_AS_FLAGS)
 endif ()
 
-include("${AOM_ROOT}/build/cmake/targets/${AOM_TARGET_CPU}.cmake")
+include("${AOM_ROOT}/build/cmake/cpu.cmake")
+
+if (ENABLE_CCACHE)
+  find_program(CCACHE "ccache")
+  if (NOT "${CCACHE}" STREQUAL "")
+    set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE}")
+  else ()
+    message("--- Cannot find ccache, ENABLE_CCACHE ignored.")
+  endif ()
+endif ()
+
+if (ENABLE_DISTCC)
+  find_program(DISTCC "distcc")
+  if (NOT "${DISTCC}" STREQUAL "")
+    set(CMAKE_C_COMPILER_LAUNCHER "${DISTCC}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${DISTCC}")
+  else ()
+    message("--- Cannot find distcc, ENABLE_DISTCC ignored.")
+  endif ()
+endif ()
+
+if (NOT CONFIG_AV1_DECODER AND NOT CONFIG_AV1_ENCODER)
+  message(FATAL_ERROR "Decoder and encoder disabled, nothing to build.")
+endif ()
 
 # Test compiler flags.
 if (MSVC)
@@ -125,13 +189,20 @@ else ()
   add_compiler_flag_if_supported("-Wimplicit-function-declaration")
   add_compiler_flag_if_supported("-Wpointer-arith")
   add_compiler_flag_if_supported("-Wsign-compare")
+  add_compiler_flag_if_supported("-Wstring-conversion")
   add_compiler_flag_if_supported("-Wtype-limits")
   add_compiler_flag_if_supported("-Wuninitialized")
   add_compiler_flag_if_supported("-Wunused")
   add_compiler_flag_if_supported("-Wvla")
+  # TODO(jzern): this could be added as a cxx flags for test/*.cc only,
+  # avoiding third_party.
+  add_c_flag_if_supported("-Wshorten-64-to-32")
 
   # Add -Wshadow only for C files to avoid massive gtest warning spam.
   add_c_flag_if_supported("-Wshadow")
+
+  # Add -Wundef only for C files to avoid massive gtest warning spam.
+  add_c_flag_if_supported("-Wundef")
 
   if (ENABLE_WERROR)
     add_compiler_flag_if_supported("-Werror")
@@ -143,9 +214,15 @@ else ()
   if (CMAKE_C_COMPILER_ID MATCHES "GNU\|Clang")
     set(CONFIG_GCC 1)
   endif ()
+
+  if ("${CMAKE_BUILD_TYPE}" MATCHES "Rel")
+    add_compiler_flag_if_supported("-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0")
+  endif ()
+  add_compiler_flag_if_supported("-D_LARGEFILE_SOURCE")
+  add_compiler_flag_if_supported("-D_FILE_OFFSET_BITS=64")
 endif ()
 
-if (AOM_TARGET_SYSTEM MATCHES "Darwin\|Linux\|Windows")
+if ("${AOM_TARGET_SYSTEM}" MATCHES "Darwin\|Linux\|Windows")
   set(CONFIG_OS_SUPPORT 1)
 endif ()
 
@@ -166,15 +243,53 @@ if (CONFIG_ANALYZER)
   include(${wxWidgets_USE_FILE})
 
   if (NOT CONFIG_INSPECTION)
-    set(CONFIG_INSPECTION 1)
-    message(WARNING
-            "--- Enabled CONFIG_INSPECTION, required for CONFIG_ANALYZER.")
+    change_config_and_warn(CONFIG_INSPECTION 1 CONFIG_ANALYZER)
   endif ()
 endif ()
 
-if (CONFIG_ANS AND CONFIG_DAALA_EC)
-  message(FATAL_ERROR
-          "CONFIG_ANS and CONFIG_DAALA_EC cannot be enabled together.")
+if (CONFIG_VAR_TX_NO_TX_MODE AND NOT CONFIG_VAR_TX)
+   change_config_and_warn(CONFIG_VAR_TX 1 CONFIG_VAR_TX_NO_TX_MODE)
+endif()
+
+if (CONFIG_DAALA_DCT4 AND NOT CONFIG_DCT_ONLY)
+  change_config_and_warn(CONFIG_DCT_ONLY 1 CONFIG_DAALA_DCT4)
+endif()
+
+if (CONFIG_DAALA_DCT4 OR CONFIG_DAALA_DCT8 OR CONFIG_DAALA_DCT16)
+  if (HAVE_MMX)
+    change_config_and_warn(HAVE_MMX 0 CONFIG_DAALA_DCTx)
+  endif()
+  if (CONFIG_RECT_TX)
+    change_config_and_warn(CONFIG_RECT_TX 0 CONFIG_DAALA_DCTx)
+  endif()
+  if (CONFIG_VAR_TX)
+     change_config_and_warn(CONFIG_VAR_TX 0 CONFIG_DAALA_DCTx)
+  endif()
+  if (CONFIG_LGT)
+    change_config_and_warn(CONFIG_LGT 0 CONFIG_DAALA_DCTx)
+  endif()
+  if (NOT CONFIG_LOWBITDEPTH)
+    change_config_and_warn(CONFIG_LOWBITDEPTH 1 CONFIG_DAALA_DCTx)
+  endif()
+endif()
+
+if (CONFIG_GCOV)
+  message("--- Testing for CONFIG_GCOV support.")
+  require_compiler_flag("-fprofile-arcs -ftest-coverage" YES)
+endif ()
+
+if (CONFIG_GPROF)
+  message("--- Testing for CONFIG_GPROF support.")
+  require_compiler_flag("-pg" YES)
+endif ()
+
+if (CONFIG_WARPED_MOTION)
+  if (CONFIG_NCOBMC)
+    change_config_and_warn(CONFIG_NCOBMC 0 CONFIG_WARPED_MOTION)
+  endif ()
+  if (CONFIG_NCOBMC_ADAPT_WEIGHT)
+    change_config_and_warn(CONFIG_NCOBMC_ADAPT_WEIGHT 0 CONFIG_WARPED_MOTION)
+  endif ()
 endif ()
 
 if (NOT MSVC)
@@ -188,13 +303,24 @@ if (NOT MSVC)
   aom_pop_var(CMAKE_REQUIRED_LIBRARIES)
 endif()
 
-# TODO(tomfinegan): consume trailing whitespace after configure_file() when
-# target platform check produces empty INLINE and RESTRICT values (aka empty
-# values require special casing).
-configure_file("${AOM_ROOT}/build/cmake/aom_config.h.cmake"
-               "${AOM_CONFIG_DIR}/aom_config.h")
-configure_file("${AOM_ROOT}/build/cmake/aom_config.asm.cmake"
-               "${AOM_CONFIG_DIR}/aom_config.asm")
+set(AOM_LIB_LINK_TYPE PUBLIC)
+if (EMSCRIPTEN)
+  # Avoid CMake generation time errors resulting from collisions with the form
+  # of target_link_libraries() used by Emscripten.cmake.
+  unset(AOM_LIB_LINK_TYPE)
+endif ()
+
+# Generate aom_config templates.
+set(aom_config_asm_template "${AOM_CONFIG_DIR}/aom_config.asm.cmake")
+set(aom_config_h_template "${AOM_CONFIG_DIR}/aom_config.h.cmake")
+execute_process(COMMAND ${CMAKE_COMMAND}
+  -DAOM_CONFIG_DIR=${AOM_CONFIG_DIR}
+  -DAOM_ROOT=${AOM_ROOT}
+  -P "${AOM_ROOT}/build/cmake/generate_aom_config_templates.cmake")
+
+# Generate aom_config.{asm,h}.
+configure_file("${aom_config_asm_template}" "${AOM_CONFIG_DIR}/aom_config.asm")
+configure_file("${aom_config_h_template}" "${AOM_CONFIG_DIR}/aom_config.h")
 
 # Read the current git hash.
 find_package(Git)
@@ -221,9 +347,9 @@ find_package(Perl)
 if (NOT PERL_FOUND)
   message(FATAL_ERROR "Perl is required to build libaom.")
 endif ()
-configure_file(
-  "${AOM_ROOT}/build/cmake/targets/rtcd_templates/${AOM_ARCH}.rtcd.cmake"
-  "${AOM_CONFIG_DIR}/${AOM_ARCH}.rtcd")
+
+configure_file("${AOM_CONFIG_DIR}/rtcd_config.cmake"
+               "${AOM_CONFIG_DIR}/${AOM_TARGET_CPU}_rtcd_config.rtcd")
 
 set(AOM_RTCD_CONFIG_FILE_LIST
     "${AOM_ROOT}/aom_dsp/aom_dsp_rtcd_defs.pl"
@@ -248,8 +374,9 @@ foreach(NUM RANGE ${AOM_RTCD_CUSTOM_COMMAND_COUNT})
   list(GET AOM_RTCD_SYMBOL_LIST ${NUM} AOM_RTCD_SYMBOL)
   execute_process(
     COMMAND ${PERL_EXECUTABLE} "${AOM_ROOT}/build/make/rtcd.pl"
-      --arch=${AOM_ARCH} --sym=${AOM_RTCD_SYMBOL} ${AOM_RTCD_FLAGS}
-      --config=${AOM_CONFIG_DIR}/${AOM_ARCH}.rtcd ${AOM_RTCD_CONFIG_FILE}
+      --arch=${AOM_TARGET_CPU} --sym=${AOM_RTCD_SYMBOL} ${AOM_RTCD_FLAGS}
+      --config=${AOM_CONFIG_DIR}/${AOM_TARGET_CPU}_rtcd_config.rtcd
+      ${AOM_RTCD_CONFIG_FILE}
     OUTPUT_FILE ${AOM_RTCD_HEADER_FILE})
 endforeach()
 
@@ -257,8 +384,12 @@ function (add_rtcd_build_step config output source symbol)
   add_custom_command(
     OUTPUT ${output}
     COMMAND ${PERL_EXECUTABLE}
-    ARGS "${AOM_ROOT}/build/make/rtcd.pl" --arch=${AOM_ARCH} --sym=${symbol}
-      ${AOM_RTCD_FLAGS} --config=${AOM_CONFIG_DIR}/${AOM_ARCH}.rtcd ${config}
+    ARGS "${AOM_ROOT}/build/make/rtcd.pl"
+      --arch=${AOM_TARGET_CPU}
+      --sym=${symbol}
+      ${AOM_RTCD_FLAGS}
+      --config=${AOM_CONFIG_DIR}/${AOM_TARGET_CPU}_rtcd_config.rtcd
+      ${config}
       > ${output}
     DEPENDS ${config}
     COMMENT "Generating ${output}"
@@ -276,3 +407,37 @@ execute_process(
   COMMAND ${PERL_EXECUTABLE} "${AOM_ROOT}/build/cmake/aom_version.pl"
   --version_data=${AOM_GIT_DESCRIPTION}
   --version_filename=${AOM_CONFIG_DIR}/aom_version.h)
+
+# Generate aom.pc (pkg-config file).
+if (NOT MSVC)
+  # Extract the version string from aom_version.h
+  file(STRINGS "${AOM_CONFIG_DIR}/aom_version.h" aom_version
+       REGEX "VERSION_STRING_NOSP")
+  string(REPLACE "#define VERSION_STRING_NOSP \"v" "" aom_version
+         "${aom_version}")
+  string(REPLACE "\"" "" aom_version "${aom_version}")
+
+  # Write pkg-config info.
+  set(prefix "${CMAKE_INSTALL_PREFIX}")
+  set(pkgconfig_file "${AOM_CONFIG_DIR}/aom.pc")
+  string(TOLOWER ${CMAKE_PROJECT_NAME} pkg_name)
+  file(WRITE "${pkgconfig_file}" "# libaom pkg-config.\n")
+  file(APPEND "${pkgconfig_file}" "prefix=${prefix}\n")
+  file(APPEND "${pkgconfig_file}" "exec_prefix=${prefix}/bin\n")
+  file(APPEND "${pkgconfig_file}" "libdir=${prefix}/lib\n")
+  file(APPEND "${pkgconfig_file}" "includedir=${prefix}/include\n\n")
+  file(APPEND "${pkgconfig_file}" "Name: ${pkg_name}\n")
+  file(APPEND "${pkgconfig_file}" "Description: AV1 codec library.\n")
+  file(APPEND "${pkgconfig_file}" "Version: ${aom_version}\n")
+  file(APPEND "${pkgconfig_file}" "Requires:\n")
+  file(APPEND "${pkgconfig_file}" "Conflicts:\n")
+  file(APPEND "${pkgconfig_file}" "Libs: -L${prefix}/lib -l${pkg_name} -lm\n")
+  if (CONFIG_MULTITHREAD AND HAVE_PTHREAD_H)
+    file(APPEND "${pkgconfig_file}" "Libs.private: -lm -lpthread\n")
+  else ()
+    file(APPEND "${pkgconfig_file}" "Libs.private: -lm\n")
+  endif ()
+  file(APPEND "${pkgconfig_file}" "Cflags: -I${prefix}/include\n")
+endif ()
+
+endif ()  # AOM_BUILD_CMAKE_AOM_CONFIGURE_CMAKE_

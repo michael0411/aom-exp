@@ -25,21 +25,22 @@ using libaom_test::ACMRandom;
 
 namespace {
 typedef void (*IhtFunc)(const tran_low_t *in, uint8_t *out, int stride,
-                        int tx_type);
+                        const TxfmParam *txfm_param);
 using std::tr1::tuple;
 using libaom_test::FhtFunc;
 typedef tuple<FhtFunc, IhtFunc, int, aom_bit_depth_t, int> Ht16x16Param;
 
-void fht16x16_ref(const int16_t *in, tran_low_t *out, int stride, int tx_type) {
-  av1_fht16x16_c(in, out, stride, tx_type);
+void fht16x16_ref(const int16_t *in, tran_low_t *out, int stride,
+                  TxfmParam *txfm_param) {
+  av1_fht16x16_c(in, out, stride, txfm_param);
 }
 
 void iht16x16_ref(const tran_low_t *in, uint8_t *dest, int stride,
-                  int tx_type) {
-  av1_iht16x16_256_add_c(in, dest, stride, tx_type);
+                  const TxfmParam *txfm_param) {
+  av1_iht16x16_256_add_c(in, dest, stride, txfm_param);
 }
 
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 typedef void (*IHbdHtFunc)(const tran_low_t *in, uint8_t *out, int stride,
                            int tx_type, int bd);
 typedef void (*HbdHtFunc)(const int16_t *input, int32_t *output, int stride,
@@ -52,7 +53,7 @@ void highbd_fht16x16_ref(const int16_t *in, int32_t *out, int stride,
                          int tx_type, int bd) {
   av1_fwd_txfm2d_16x16_c(in, out, stride, tx_type, bd);
 }
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
 
 class AV1Trans16x16HT : public libaom_test::TransformTestBase,
                         public ::testing::TestWithParam<Ht16x16Param> {
@@ -62,7 +63,6 @@ class AV1Trans16x16HT : public libaom_test::TransformTestBase,
   virtual void SetUp() {
     fwd_txfm_ = GET_PARAM(0);
     inv_txfm_ = GET_PARAM(1);
-    tx_type_ = GET_PARAM(2);
     pitch_ = 16;
     height_ = 16;
     fwd_txfm_ref = fht16x16_ref;
@@ -70,16 +70,17 @@ class AV1Trans16x16HT : public libaom_test::TransformTestBase,
     bit_depth_ = GET_PARAM(3);
     mask_ = (1 << bit_depth_) - 1;
     num_coeffs_ = GET_PARAM(4);
+    txfm_param_.tx_type = GET_PARAM(2);
   }
   virtual void TearDown() { libaom_test::ClearSystemState(); }
 
  protected:
   void RunFwdTxfm(const int16_t *in, tran_low_t *out, int stride) {
-    fwd_txfm_(in, out, stride, tx_type_);
+    fwd_txfm_(in, out, stride, &txfm_param_);
   }
 
   void RunInvTxfm(const tran_low_t *out, uint8_t *dst, int stride) {
-    inv_txfm_(out, dst, stride, tx_type_);
+    inv_txfm_(out, dst, stride, &txfm_param_);
   }
 
   FhtFunc fwd_txfm_;
@@ -92,7 +93,7 @@ TEST_P(AV1Trans16x16HT, InvAccuracyCheck) { RunInvAccuracyCheck(1); }
 TEST_P(AV1Trans16x16HT, CoeffCheck) { RunCoeffCheck(); }
 TEST_P(AV1Trans16x16HT, InvCoeffCheck) { RunInvCoeffCheck(); }
 
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 class AV1HighbdTrans16x16HT
     : public ::testing::TestWithParam<HighbdHt16x16Param> {
  public:
@@ -159,11 +160,11 @@ void AV1HighbdTrans16x16HT::RunBitexactCheck() {
 }
 
 TEST_P(AV1HighbdTrans16x16HT, HighbdCoeffCheck) { RunBitexactCheck(); }
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
 
 using std::tr1::make_tuple;
 
-#if HAVE_SSE2 && !CONFIG_EMULATE_HARDWARE
+#if HAVE_SSE2
 const Ht16x16Param kArrayHt16x16Param_sse2[] = {
   make_tuple(&av1_fht16x16_sse2, &av1_iht16x16_256_add_sse2, 0, AOM_BITS_8,
              256),
@@ -184,6 +185,8 @@ const Ht16x16Param kArrayHt16x16Param_sse2[] = {
              256),
   make_tuple(&av1_fht16x16_sse2, &av1_iht16x16_256_add_sse2, 8, AOM_BITS_8,
              256),
+  make_tuple(&av1_fht16x16_sse2, &av1_iht16x16_256_add_sse2, 9, AOM_BITS_8,
+             256),
   make_tuple(&av1_fht16x16_sse2, &av1_iht16x16_256_add_sse2, 10, AOM_BITS_8,
              256),
   make_tuple(&av1_fht16x16_sse2, &av1_iht16x16_256_add_sse2, 11, AOM_BITS_8,
@@ -200,9 +203,9 @@ const Ht16x16Param kArrayHt16x16Param_sse2[] = {
 };
 INSTANTIATE_TEST_CASE_P(SSE2, AV1Trans16x16HT,
                         ::testing::ValuesIn(kArrayHt16x16Param_sse2));
-#endif  // HAVE_SSE2 && !CONFIG_EMULATE_HARDWARE
+#endif  // HAVE_SSE2
 
-#if HAVE_AVX2 && !CONFIG_EMULATE_HARDWARE
+#if HAVE_AVX2
 const Ht16x16Param kArrayHt16x16Param_avx2[] = {
   make_tuple(&av1_fht16x16_avx2, &av1_iht16x16_256_add_avx2, 0, AOM_BITS_8,
              256),
@@ -223,6 +226,8 @@ const Ht16x16Param kArrayHt16x16Param_avx2[] = {
              256),
   make_tuple(&av1_fht16x16_avx2, &av1_iht16x16_256_add_avx2, 8, AOM_BITS_8,
              256),
+  make_tuple(&av1_fht16x16_avx2, &av1_iht16x16_256_add_avx2, 9, AOM_BITS_8,
+             256),
   make_tuple(&av1_fht16x16_avx2, &av1_iht16x16_256_add_avx2, 10, AOM_BITS_8,
              256),
   make_tuple(&av1_fht16x16_avx2, &av1_iht16x16_256_add_avx2, 11, AOM_BITS_8,
@@ -239,9 +244,9 @@ const Ht16x16Param kArrayHt16x16Param_avx2[] = {
 };
 INSTANTIATE_TEST_CASE_P(AVX2, AV1Trans16x16HT,
                         ::testing::ValuesIn(kArrayHt16x16Param_avx2));
-#endif  // HAVE_AVX2 && !CONFIG_EMULATE_HARDWARE
+#endif  // HAVE_AVX2
 
-#if HAVE_SSE4_1 && CONFIG_AOM_HIGHBITDEPTH && !CONFIG_EMULATE_HARDWARE
+#if HAVE_SSE4_1 && CONFIG_HIGHBITDEPTH
 const HighbdHt16x16Param kArrayHBDHt16x16Param_sse4_1[] = {
   make_tuple(&av1_fwd_txfm2d_16x16_sse4_1, 0, 10),
   make_tuple(&av1_fwd_txfm2d_16x16_sse4_1, 0, 12),
@@ -266,6 +271,6 @@ const HighbdHt16x16Param kArrayHBDHt16x16Param_sse4_1[] = {
 };
 INSTANTIATE_TEST_CASE_P(SSE4_1, AV1HighbdTrans16x16HT,
                         ::testing::ValuesIn(kArrayHBDHt16x16Param_sse4_1));
-#endif  // HAVE_SSE4_1 && CONFIG_AOM_HIGHBITDEPTH && !CONFIG_EMULATE_HARDWARE
+#endif  // HAVE_SSE4_1 && CONFIG_HIGHBITDEPTH
 
 }  // namespace

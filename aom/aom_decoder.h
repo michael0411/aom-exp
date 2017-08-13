@@ -55,8 +55,6 @@ extern "C" {
 #define AOM_CODEC_CAP_PUT_SLICE 0x10000 /**< Will issue put_slice callbacks */
 #define AOM_CODEC_CAP_PUT_FRAME 0x20000 /**< Will issue put_frame callbacks */
 #define AOM_CODEC_CAP_POSTPROC 0x40000  /**< Can postprocess decoded frame */
-/*!\brief Can conceal errors due to packet loss */
-#define AOM_CODEC_CAP_ERROR_CONCEALMENT 0x80000
 /*!\brief Can receive encoded frames one fragment at a time */
 #define AOM_CODEC_CAP_INPUT_FRAGMENTS 0x100000
 
@@ -73,8 +71,6 @@ extern "C" {
 #define AOM_CODEC_CAP_EXTERNAL_FRAME_BUFFER 0x400000
 
 #define AOM_CODEC_USE_POSTPROC 0x10000 /**< Postprocess decoded frame */
-/*!\brief Conceal errors in decoded frames */
-#define AOM_CODEC_USE_ERROR_CONCEALMENT 0x20000
 /*!\brief The input frame should be passed to the decoder one fragment at a
  * time */
 #define AOM_CODEC_USE_INPUT_FRAGMENTS 0x40000
@@ -84,11 +80,9 @@ extern "C" {
 /*!\brief Stream properties
  *
  * This structure is used to query or set properties of the decoded
- * stream. Algorithms may extend this structure with data specific
- * to their bitstream by setting the sz member appropriately.
+ * stream.
  */
 typedef struct aom_codec_stream_info {
-  unsigned int sz;    /**< Size of this structure */
   unsigned int w;     /**< Width (or 0 for unknown/default) */
   unsigned int h;     /**< Height (or 0 for unknown/default) */
   unsigned int is_kf; /**< Current frame is a keyframe */
@@ -109,7 +103,8 @@ typedef struct aom_codec_dec_cfg {
   unsigned int threads; /**< Maximum number of threads to use, default 1 */
   unsigned int w;       /**< Width */
   unsigned int h;       /**< Height */
-} aom_codec_dec_cfg_t;  /**< alias for struct aom_codec_dec_cfg */
+  unsigned int allow_lowbitdepth; /**< Allow use of low-bitdepth coding path */
+} aom_codec_dec_cfg_t;            /**< alias for struct aom_codec_dec_cfg */
 
 /*!\brief Initialize a decoder instance
  *
@@ -154,13 +149,15 @@ aom_codec_err_t aom_codec_dec_init_ver(aom_codec_ctx_t *ctx,
  * \param[in]      iface   Pointer to the algorithm interface
  * \param[in]      data    Pointer to a block of data to parse
  * \param[in]      data_sz Size of the data buffer
- * \param[in,out]  si      Pointer to stream info to update. The size member
- *                         \ref MUST be properly initialized, but \ref MAY be
- *                         clobbered by the algorithm. This parameter \ref MAY
- *                         be NULL.
+ * \param[in,out]  si      Pointer to stream info to update.
  *
  * \retval #AOM_CODEC_OK
- *     Bitstream is parsable and stream information updated
+ *     Bitstream is parsable and stream information updated.
+ * \retval #AOM_CODEC_INVALID_PARAM
+ *     One of the arguments is invalid, for example a NULL pointer.
+ * \retval #AOM_CODEC_UNSUP_BITSTREAM
+ *     The decoder didn't recognize the coded data, or the
+ *     buffer was too short.
  */
 aom_codec_err_t aom_codec_peek_stream_info(aom_codec_iface_t *iface,
                                            const uint8_t *data,
@@ -172,13 +169,14 @@ aom_codec_err_t aom_codec_peek_stream_info(aom_codec_iface_t *iface,
  * Returns information about the stream that has been parsed during decoding.
  *
  * \param[in]      ctx     Pointer to this instance's context
- * \param[in,out]  si      Pointer to stream info to update. The size member
- *                         \ref MUST be properly initialized, but \ref MAY be
- *                         clobbered by the algorithm. This parameter \ref MAY
- *                         be NULL.
+ * \param[in,out]  si      Pointer to stream info to update.
  *
  * \retval #AOM_CODEC_OK
- *     Bitstream is parsable and stream information updated
+ *     Bitstream is parsable and stream information updated.
+ * \retval #AOM_CODEC_INVALID_PARAM
+ *     One of the arguments is invalid, for example a NULL pointer.
+ * \retval #AOM_CODEC_UNSUP_BITSTREAM
+ *     The decoder couldn't parse the submitted data.
  */
 aom_codec_err_t aom_codec_get_stream_info(aom_codec_ctx_t *ctx,
                                           aom_codec_stream_info_t *si);

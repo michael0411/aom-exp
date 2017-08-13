@@ -16,6 +16,11 @@
 #include "av1/common/enums.h"
 #include "av1/common/reconintra.h"
 
+#if USE_3TAP_INTRA_FILTER
+void filterintra_sse4_3tap_dummy_func(void);
+void filterintra_sse4_3tap_dummy_func(void) {}
+#else
+
 static INLINE void AddPixelsSmall(const uint8_t *above, const uint8_t *left,
                                   __m128i *sum) {
   const __m128i a = _mm_loadu_si128((const __m128i *)above);
@@ -577,7 +582,7 @@ void av1_tm_filter_predictor_sse4_1(uint8_t *dst, ptrdiff_t stride, int bs,
 }
 
 // ============== High Bit Depth ==============
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 static INLINE int HighbdGetMeanValue4x4(const uint16_t *above,
                                         const uint16_t *left, const int bd,
                                         __m128i *params) {
@@ -888,4 +893,6 @@ void av1_highbd_tm_filter_predictor_sse4_1(uint16_t *dst, ptrdiff_t stride,
   GetIntraFilterParams(bs, TM_PRED, &prm[0]);
   HighbdFilterPrediction(above, left, bs, bd, prm, dst, stride);
 }
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
+
+#endif  // USE_3TAP_INTRA_FILTER

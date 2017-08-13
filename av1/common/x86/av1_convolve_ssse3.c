@@ -19,13 +19,13 @@
 #define WIDTH_BOUND (16)
 #define HEIGHT_BOUND (16)
 
-#if CONFIG_DUAL_FILTER
+#if CONFIG_DUAL_FILTER && USE_EXTRA_FILTER
 DECLARE_ALIGNED(16, static int8_t,
                 sub_pel_filters_12sharp_signal_dir[15][2][16]);
 
 DECLARE_ALIGNED(16, static int8_t,
                 sub_pel_filters_12sharp_ver_signal_dir[15][6][16]);
-#endif  // CONFIG_DUAL_FILTER
+#endif  // CONFIG_DUAL_FILTER && USE_EXTRA_FILTER
 
 #if USE_TEMPORALFILTER_12TAP
 DECLARE_ALIGNED(16, static int8_t,
@@ -39,7 +39,7 @@ typedef int8_t (*SubpelFilterCoeffs)[16];
 
 static INLINE SubpelFilterCoeffs
 get_subpel_filter_signal_dir(const InterpFilterParams p, int index) {
-#if CONFIG_DUAL_FILTER
+#if CONFIG_DUAL_FILTER && USE_EXTRA_FILTER
   if (p.interp_filter == MULTITAP_SHARP) {
     return &sub_pel_filters_12sharp_signal_dir[index][0];
   }
@@ -56,7 +56,7 @@ get_subpel_filter_signal_dir(const InterpFilterParams p, int index) {
 
 static INLINE SubpelFilterCoeffs
 get_subpel_filter_ver_signal_dir(const InterpFilterParams p, int index) {
-#if CONFIG_DUAL_FILTER
+#if CONFIG_DUAL_FILTER && USE_EXTRA_FILTER
   if (p.interp_filter == MULTITAP_SHARP) {
     return &sub_pel_filters_12sharp_ver_signal_dir[index][0];
   }
@@ -143,6 +143,7 @@ static void horiz_w4_ssse3(const uint8_t *src, const __m128i *f, int tapsNum,
   const __m128i k_256 = _mm_set1_epi16(1 << 8);
   const __m128i zero = _mm_setzero_si128();
 
+  assert(tapsNum == 10 || tapsNum == 12);
   if (10 == tapsNum) {
     src -= 1;
   }
@@ -470,6 +471,7 @@ static void filter_horiz_v8p_ssse3(const uint8_t *src_ptr, ptrdiff_t src_pitch,
   __m128i min_x2x3, max_x2x3;
   __m128i temp;
 
+  assert(tapsNum == 10 || tapsNum == 12);
   if (tapsNum == 10) {
     src_ptr -= 1;
   }
@@ -612,6 +614,7 @@ static void filter_horiz_v4p_ssse3(const uint8_t *src_ptr, ptrdiff_t src_pitch,
   __m128i x0, x1, x2, x3, x4, x5;
   __m128i min_x2x3, max_x2x3, temp;
 
+  assert(tapsNum == 10 || tapsNum == 12);
   if (tapsNum == 10) {
     src_ptr -= 1;
   }
@@ -673,11 +676,12 @@ void av1_convolve_horiz_ssse3(const uint8_t *src, int src_stride, uint8_t *dst,
   __m128i verf[6];
   __m128i horf[2];
   SubpelFilterCoeffs hCoeffs, vCoeffs;
+  assert(conv_params->do_average == 0 || conv_params->do_average == 1);
   const uint8_t *src_ptr;
-  store_pixel_t store2p = store2pixelTab[conv_params->ref];
-  store_pixel_t store4p = store4pixelTab[conv_params->ref];
-  transpose_to_dst_t transpose_4x4 = trans4x4Tab[conv_params->ref];
-  transpose_to_dst_t transpose_8x8 = trans8x8Tab[conv_params->ref];
+  store_pixel_t store2p = store2pixelTab[conv_params->do_average];
+  store_pixel_t store4p = store4pixelTab[conv_params->do_average];
+  transpose_to_dst_t transpose_4x4 = trans4x4Tab[conv_params->do_average];
+  transpose_to_dst_t transpose_8x8 = trans8x8Tab[conv_params->do_average];
 
   const int tapsNum = filter_params.taps;
   int block_height, block_residu;
@@ -887,10 +891,11 @@ void av1_convolve_vert_ssse3(const uint8_t *src, int src_stride, uint8_t *dst,
   __m128i verf[6];
   SubpelFilterCoeffs vCoeffs;
   const uint8_t *src_ptr;
+  assert(conv_params->do_average == 0 || conv_params->do_average == 1);
   uint8_t *dst_ptr = dst;
-  store_pixel_t store2p = store2pixelTab[conv_params->ref];
-  store_pixel_t store4p = store4pixelTab[conv_params->ref];
-  store_pixel_t store8p = store8pixelTab[conv_params->ref];
+  store_pixel_t store2p = store2pixelTab[conv_params->do_average];
+  store_pixel_t store4p = store4pixelTab[conv_params->do_average];
+  store_pixel_t store8p = store8pixelTab[conv_params->do_average];
   const int tapsNum = filter_params.taps;
 
   if (0 == subpel_y_q4 || 16 != y_step_q4) {
@@ -982,7 +987,7 @@ typedef struct SimdFilter {
   int8_t (*simd_vert_filter)[6][16];
 } SimdFilter;
 
-#if CONFIG_DUAL_FILTER
+#if CONFIG_DUAL_FILTER && USE_EXTRA_FILTER
 #define MULTITAP_FILTER_NUM 1
 SimdFilter simd_filters[MULTITAP_FILTER_NUM] = {
   { MULTITAP_SHARP, &sub_pel_filters_12sharp_signal_dir[0],
@@ -1010,7 +1015,7 @@ void av1_lowbd_convolve_init_ssse3(void) {
                           temporal_simd_filter.simd_vert_filter);
   }
 #endif
-#if CONFIG_DUAL_FILTER
+#if CONFIG_DUAL_FILTER && USE_EXTRA_FILTER
   {
     int i;
     for (i = 0; i < MULTITAP_FILTER_NUM; ++i) {

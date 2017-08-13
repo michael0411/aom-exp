@@ -24,8 +24,37 @@ enum {
               (1 << D207_PRED) | (1 << D63_PRED) |
 #if CONFIG_ALT_INTRA
               (1 << SMOOTH_PRED) |
+#if CONFIG_SMOOTH_HV
+              (1 << SMOOTH_V_PRED) | (1 << SMOOTH_H_PRED) |
+#endif  // CONFIG_SMOOTH_HV
 #endif  // CONFIG_ALT_INTRA
               (1 << TM_PRED),
+#if CONFIG_CFL
+  UV_INTRA_ALL = (1 << UV_DC_PRED) | (1 << UV_V_PRED) | (1 << UV_H_PRED) |
+                 (1 << UV_D45_PRED) | (1 << UV_D135_PRED) |
+                 (1 << UV_D117_PRED) | (1 << UV_D153_PRED) |
+                 (1 << UV_D207_PRED) | (1 << UV_D63_PRED) |
+#if CONFIG_ALT_INTRA
+                 (1 << UV_SMOOTH_PRED) |
+#if CONFIG_SMOOTH_HV
+                 (1 << UV_SMOOTH_V_PRED) | (1 << UV_SMOOTH_H_PRED) |
+#endif  // CONFIG_SMOOTH_HV
+#endif  // CONFIG_ALT_INTRA
+                 (1 << UV_TM_PRED) | (1 << UV_CFL_PRED),
+  UV_INTRA_DC = (1 << UV_DC_PRED),
+  UV_INTRA_DC_CFL = (1 << UV_DC_PRED) | (1 << UV_CFL_PRED),
+  UV_INTRA_DC_TM = (1 << UV_DC_PRED) | (1 << UV_TM_PRED),
+  UV_INTRA_DC_TM_CFL =
+      (1 << UV_DC_PRED) | (1 << UV_TM_PRED) | (1 << UV_CFL_PRED),
+  UV_INTRA_DC_H_V = (1 << UV_DC_PRED) | (1 << UV_V_PRED) | (1 << UV_H_PRED),
+  UV_INTRA_DC_H_V_CFL = (1 << UV_DC_PRED) | (1 << UV_V_PRED) |
+                        (1 << UV_H_PRED) | (1 << UV_CFL_PRED),
+  UV_INTRA_DC_TM_H_V = (1 << UV_DC_PRED) | (1 << UV_TM_PRED) |
+                       (1 << UV_V_PRED) | (1 << UV_H_PRED),
+  UV_INTRA_DC_TM_H_V_CFL = (1 << UV_DC_PRED) | (1 << UV_TM_PRED) |
+                           (1 << UV_V_PRED) | (1 << UV_H_PRED) |
+                           (1 << UV_CFL_PRED),
+#endif  // CONFIG_CFL
   INTRA_DC = (1 << DC_PRED),
   INTRA_DC_TM = (1 << DC_PRED) | (1 << TM_PRED),
   INTRA_DC_H_V = (1 << DC_PRED) | (1 << V_PRED) | (1 << H_PRED),
@@ -35,41 +64,41 @@ enum {
 
 #if CONFIG_EXT_INTER
 enum {
+#if CONFIG_COMPOUND_SINGLEREF
+// TODO(zoeliu): To further consider following single ref comp modes:
+//               SR_NEAREST_NEARMV, SR_NEAREST_NEWMV, SR_NEAR_NEWMV,
+//               SR_ZERO_NEWMV, and SR_NEW_NEWMV.
+#endif  // CONFIG_COMPOUND_SINGLEREF
   INTER_ALL = (1 << NEARESTMV) | (1 << NEARMV) | (1 << ZEROMV) | (1 << NEWMV) |
-              (1 << NEWFROMNEARMV) | (1 << NEAREST_NEARESTMV) |
-              (1 << NEAR_NEARMV) | (1 << NEAREST_NEARMV) |
-              (1 << NEAR_NEARESTMV) | (1 << NEW_NEWMV) | (1 << NEAREST_NEWMV) |
-              (1 << NEAR_NEWMV) | (1 << NEW_NEARMV) | (1 << NEW_NEARESTMV) |
-              (1 << ZERO_ZEROMV),
+              (1 << NEAREST_NEARESTMV) | (1 << NEAR_NEARMV) | (1 << NEW_NEWMV) |
+              (1 << NEAREST_NEWMV) | (1 << NEAR_NEWMV) | (1 << NEW_NEARMV) |
+              (1 << NEW_NEARESTMV) | (1 << ZERO_ZEROMV),
   INTER_NEAREST = (1 << NEARESTMV) | (1 << NEAREST_NEARESTMV) |
-                  (1 << NEAREST_NEARMV) | (1 << NEAR_NEARESTMV) |
                   (1 << NEW_NEARESTMV) | (1 << NEAREST_NEWMV),
-  INTER_NEAREST_NEW = (1 << NEARESTMV) | (1 << NEWMV) | (1 << NEWFROMNEARMV) |
+  INTER_NEAREST_NEW = (1 << NEARESTMV) | (1 << NEWMV) |
                       (1 << NEAREST_NEARESTMV) | (1 << NEW_NEWMV) |
-                      (1 << NEAR_NEARESTMV) | (1 << NEAREST_NEARMV) |
                       (1 << NEW_NEARESTMV) | (1 << NEAREST_NEWMV) |
                       (1 << NEW_NEARMV) | (1 << NEAR_NEWMV),
   INTER_NEAREST_ZERO = (1 << NEARESTMV) | (1 << ZEROMV) |
                        (1 << NEAREST_NEARESTMV) | (1 << ZERO_ZEROMV) |
-                       (1 << NEAREST_NEARMV) | (1 << NEAR_NEARESTMV) |
                        (1 << NEAREST_NEWMV) | (1 << NEW_NEARESTMV),
-  INTER_NEAREST_NEW_ZERO =
-      (1 << NEARESTMV) | (1 << ZEROMV) | (1 << NEWMV) | (1 << NEWFROMNEARMV) |
-      (1 << NEAREST_NEARESTMV) | (1 << ZERO_ZEROMV) | (1 << NEW_NEWMV) |
-      (1 << NEAREST_NEARMV) | (1 << NEAR_NEARESTMV) | (1 << NEW_NEARESTMV) |
-      (1 << NEAREST_NEWMV) | (1 << NEW_NEARMV) | (1 << NEAR_NEWMV),
-  INTER_NEAREST_NEAR_NEW =
-      (1 << NEARESTMV) | (1 << NEARMV) | (1 << NEWMV) | (1 << NEWFROMNEARMV) |
-      (1 << NEAREST_NEARESTMV) | (1 << NEW_NEWMV) | (1 << NEAREST_NEARMV) |
-      (1 << NEAR_NEARESTMV) | (1 << NEW_NEARESTMV) | (1 << NEAREST_NEWMV) |
-      (1 << NEW_NEARMV) | (1 << NEAR_NEWMV) | (1 << NEAR_NEARMV),
-  INTER_NEAREST_NEAR_ZERO =
-      (1 << NEARESTMV) | (1 << NEARMV) | (1 << ZEROMV) |
-      (1 << NEAREST_NEARESTMV) | (1 << ZERO_ZEROMV) | (1 << NEAREST_NEARMV) |
-      (1 << NEAR_NEARESTMV) | (1 << NEAREST_NEWMV) | (1 << NEW_NEARESTMV) |
-      (1 << NEW_NEARMV) | (1 << NEAR_NEWMV) | (1 << NEAR_NEARMV),
+  INTER_NEAREST_NEW_ZERO = (1 << NEARESTMV) | (1 << ZEROMV) | (1 << NEWMV) |
+                           (1 << NEAREST_NEARESTMV) | (1 << ZERO_ZEROMV) |
+                           (1 << NEW_NEWMV) | (1 << NEW_NEARESTMV) |
+                           (1 << NEAREST_NEWMV) | (1 << NEW_NEARMV) |
+                           (1 << NEAR_NEWMV),
+  INTER_NEAREST_NEAR_NEW = (1 << NEARESTMV) | (1 << NEARMV) | (1 << NEWMV) |
+                           (1 << NEAREST_NEARESTMV) | (1 << NEW_NEWMV) |
+                           (1 << NEW_NEARESTMV) | (1 << NEAREST_NEWMV) |
+                           (1 << NEW_NEARMV) | (1 << NEAR_NEWMV) |
+                           (1 << NEAR_NEARMV),
+  INTER_NEAREST_NEAR_ZERO = (1 << NEARESTMV) | (1 << NEARMV) | (1 << ZEROMV) |
+                            (1 << NEAREST_NEARESTMV) | (1 << ZERO_ZEROMV) |
+                            (1 << NEAREST_NEWMV) | (1 << NEW_NEARESTMV) |
+                            (1 << NEW_NEARMV) | (1 << NEAR_NEWMV) |
+                            (1 << NEAR_NEARMV),
 };
-#else
+#else   // !CONFIG_EXT_INTER
 enum {
   INTER_ALL = (1 << NEARESTMV) | (1 << NEARMV) | (1 << ZEROMV) | (1 << NEWMV),
   INTER_NEAREST = (1 << NEARESTMV),
@@ -135,8 +164,7 @@ typedef enum {
 
 typedef enum {
   NOT_IN_USE = 0,
-  RELAXED_NEIGHBORING_MIN_MAX = 1,
-  STRICT_NEIGHBORING_MIN_MAX = 2
+  RELAXED_NEIGHBORING_MIN_MAX = 1
 } AUTO_MIN_MAX_MODE;
 
 typedef enum {
@@ -198,14 +226,7 @@ typedef enum {
   // Always use a fixed size partition
   FIXED_PARTITION,
 
-  REFERENCE_PARTITION,
-
-  // Use an arbitrary partitioning scheme based on source variance within
-  // a 64X64 SB
-  VAR_BASED_PARTITION,
-
-  // Use non-fixed partitions based on source variance
-  SOURCE_VAR_BASED_PARTITION
+  REFERENCE_PARTITION
 } PARTITION_SEARCH_TYPE;
 
 typedef enum {
@@ -252,6 +273,14 @@ typedef struct MESH_PATTERN {
   int range;
   int interval;
 } MESH_PATTERN;
+
+#if CONFIG_GLOBAL_MOTION
+typedef enum {
+  GM_FULL_SEARCH,
+  GM_REDUCED_REF_SEARCH,
+  GM_DISABLE_SEARCH
+} GM_SEARCH_TYPE;
+#endif  // CONFIG_GLOBAL_MOTION
 
 typedef struct SPEED_FEATURES {
   MV_SPEED_FEATURES mv;
@@ -401,10 +430,6 @@ typedef struct SPEED_FEATURES {
   int intra_y_mode_mask[TX_SIZES];
   int intra_uv_mode_mask[TX_SIZES];
 
-  // These bit masks allow you to enable or disable intra modes for each
-  // prediction block size separately.
-  int intra_y_mode_bsize_mask[BLOCK_SIZES];
-
   // This variable enables an early break out of mode testing if the model for
   // rd built from the prediction signal indicates a value that's much
   // higher than the best rd we've seen so far.
@@ -419,7 +444,7 @@ typedef struct SPEED_FEATURES {
 
   // A binary mask indicating if NEARESTMV, NEARMV, ZEROMV, NEWMV
   // modes are used in order from LSB to MSB for each BLOCK_SIZE.
-  int inter_mode_mask[BLOCK_SIZES];
+  int inter_mode_mask[BLOCK_SIZES_ALL];
 
   // This feature controls whether we do the expensive context update and
   // calculation in the rd coefficient costing loop.
@@ -434,7 +459,7 @@ typedef struct SPEED_FEATURES {
   // TODO(aconverse): Fold this into one of the other many mode skips
   BLOCK_SIZE max_intra_bsize;
 
-  // The frequency that we check if SOURCE_VAR_BASED_PARTITION or
+  // The frequency that we check if
   // FIXED_PARTITION search type should be used.
   int search_type_check_frequency;
 
@@ -472,6 +497,10 @@ typedef struct SPEED_FEATURES {
   // Whether to compute distortion in the image domain (slower but
   // more accurate), or in the transform domain (faster but less acurate).
   int use_transform_domain_distortion;
+
+#if CONFIG_GLOBAL_MOTION
+  GM_SEARCH_TYPE gm_search_type;
+#endif  // CONFIG_GLOBAL_MOTION
 } SPEED_FEATURES;
 
 struct AV1_COMP;

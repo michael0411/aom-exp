@@ -14,6 +14,9 @@
 #ifndef AV1_COMMON_ODINTRIN_H_
 #define AV1_COMMON_ODINTRIN_H_
 
+#if defined(_MSC_VER)
+# define _USE_MATH_DEFINES
+#endif
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -51,8 +54,6 @@ extern "C" {
 #define OD_LOG_BSIZE0 (2)
 /*There are 5 block sizes total (4x4, 8x8, 16x16, 32x32 and 64x64).*/
 #define OD_NBSIZES (5)
-/*The maximum length of the side of a block.*/
-#define OD_BSIZE_MAX MAX_SB_SIZE
 
 /*There are 4 transform sizes total in AV1 (4x4, 8x8, 16x16 and 32x32).*/
 #define OD_TXSIZES TX_SIZES
@@ -86,9 +87,13 @@ extern "C" {
 # define OD_LIMIT_BSIZE_MIN (OD_BLOCK_4X4)
 # define OD_LIMIT_BSIZE_MAX (OD_BLOCK_32X32)
 
-# define OD_ROBUST_STREAM (1)
-
 typedef int od_coeff;
+
+/*This is the strength reduced version of ((_a)/(1 << (_b))).
+  This will not work for _b == 0, however currently this is only used for
+   b == 1 anyway.*/
+# define OD_UNBIASED_RSHIFT32(_a, _b) \
+  (((int32_t)(((uint32_t)(_a) >> (32 - (_b))) + (_a))) >> (_b))
 
 #define OD_DIVU_DMAX (1024)
 

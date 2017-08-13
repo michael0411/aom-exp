@@ -25,44 +25,6 @@ static INLINE unsigned int horizontal_add_u16x8(const uint16x8_t v_16x8) {
   return vget_lane_u32(c, 0);
 }
 
-unsigned int aom_avg_4x4_neon(const uint8_t *s, int p) {
-  uint16x8_t v_sum;
-  uint32x2_t v_s0 = vdup_n_u32(0);
-  uint32x2_t v_s1 = vdup_n_u32(0);
-  v_s0 = vld1_lane_u32((const uint32_t *)s, v_s0, 0);
-  v_s0 = vld1_lane_u32((const uint32_t *)(s + p), v_s0, 1);
-  v_s1 = vld1_lane_u32((const uint32_t *)(s + 2 * p), v_s1, 0);
-  v_s1 = vld1_lane_u32((const uint32_t *)(s + 3 * p), v_s1, 1);
-  v_sum = vaddl_u8(vreinterpret_u8_u32(v_s0), vreinterpret_u8_u32(v_s1));
-  return (horizontal_add_u16x8(v_sum) + 8) >> 4;
-}
-
-unsigned int aom_avg_8x8_neon(const uint8_t *s, int p) {
-  uint8x8_t v_s0 = vld1_u8(s);
-  const uint8x8_t v_s1 = vld1_u8(s + p);
-  uint16x8_t v_sum = vaddl_u8(v_s0, v_s1);
-
-  v_s0 = vld1_u8(s + 2 * p);
-  v_sum = vaddw_u8(v_sum, v_s0);
-
-  v_s0 = vld1_u8(s + 3 * p);
-  v_sum = vaddw_u8(v_sum, v_s0);
-
-  v_s0 = vld1_u8(s + 4 * p);
-  v_sum = vaddw_u8(v_sum, v_s0);
-
-  v_s0 = vld1_u8(s + 5 * p);
-  v_sum = vaddw_u8(v_sum, v_s0);
-
-  v_s0 = vld1_u8(s + 6 * p);
-  v_sum = vaddw_u8(v_sum, v_s0);
-
-  v_s0 = vld1_u8(s + 7 * p);
-  v_sum = vaddw_u8(v_sum, v_s0);
-
-  return (horizontal_add_u16x8(v_sum) + 32) >> 6;
-}
-
 // coeff: 16 bits, dynamic range [-32640, 32640].
 // length: value range {16, 64, 256, 1024}.
 int aom_satd_neon(const int16_t *coeff, int length) {
@@ -90,8 +52,8 @@ int aom_satd_neon(const int16_t *coeff, int length) {
   }
 }
 
-void aom_int_pro_row_neon(int16_t hbuf[16], uint8_t const *ref,
-                          const int ref_stride, const int height) {
+void aom_int_pro_row_neon(int16_t hbuf[16], uint8_t const *ref, int ref_stride,
+                          int height) {
   int i;
   uint16x8_t vec_sum_lo = vdupq_n_u16(0);
   uint16x8_t vec_sum_hi = vdupq_n_u16(0);
@@ -159,7 +121,7 @@ int16_t aom_int_pro_col_neon(uint8_t const *ref, const int width) {
 
 // ref, src = [0, 510] - max diff = 16-bits
 // bwl = {2, 3, 4}, width = {16, 32, 64}
-int aom_vector_var_neon(int16_t const *ref, int16_t const *src, const int bwl) {
+int aom_vector_var_neon(int16_t const *ref, int16_t const *src, int bwl) {
   int width = 4 << bwl;
   int32x4_t sse = vdupq_n_s32(0);
   int16x8_t total = vdupq_n_s16(0);

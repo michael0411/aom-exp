@@ -61,6 +61,8 @@ extern "C" {
 #define SGRPROJ_PRJ_MAX1 (SGRPROJ_PRJ_MIN1 + (1 << SGRPROJ_PRJ_BITS) - 1)
 #endif  // USE_HIGHPASS_IN_SGRPROJ
 
+#define SGRPROJ_PRJ_SUBEXP_K 4
+
 #define SGRPROJ_BITS (SGRPROJ_PRJ_BITS * 2 + SGRPROJ_PARAMS_BITS)
 
 #define MAX_RADIUS 3  // Only 1, 2, 3 allowed
@@ -79,10 +81,17 @@ extern "C" {
 #define WIENER_FILT_PREC_BITS 7
 #define WIENER_FILT_STEP (1 << WIENER_FILT_PREC_BITS)
 
+// Whether to use high intermediate precision filtering
+#define USE_WIENER_HIGH_INTERMEDIATE_PRECISION 1
+
 // Central values for the taps
 #define WIENER_FILT_TAP0_MIDV (3)
 #define WIENER_FILT_TAP1_MIDV (-7)
 #define WIENER_FILT_TAP2_MIDV (15)
+#define WIENER_FILT_TAP3_MIDV                           \
+  (WIENER_FILT_STEP -                                   \
+   2 * (WIENER_FILT_TAP0_MIDV + WIENER_FILT_TAP1_MIDV + \
+        WIENER_FILT_TAP2_MIDV))
 
 #define WIENER_FILT_TAP0_BITS 4
 #define WIENER_FILT_TAP1_BITS 5
@@ -104,6 +113,10 @@ extern "C" {
   (WIENER_FILT_TAP1_MIDV - 1 + (1 << WIENER_FILT_TAP1_BITS) / 2)
 #define WIENER_FILT_TAP2_MAXV \
   (WIENER_FILT_TAP2_MIDV - 1 + (1 << WIENER_FILT_TAP2_BITS) / 2)
+
+#define WIENER_FILT_TAP0_SUBEXP_K 1
+#define WIENER_FILT_TAP1_SUBEXP_K 2
+#define WIENER_FILT_TAP2_SUBEXP_K 3
 
 // Max of SGRPROJ_TMPBUF_SIZE, DOMAINTXFMRF_TMPBUF_SIZE, WIENER_TMPBUF_SIZE
 #define RESTORATION_TMPBUF_SIZE (SGRPROJ_TMPBUF_SIZE)
@@ -158,6 +171,23 @@ typedef struct {
   int nhtiles, nvtiles;
   int32_t *tmpbuf;
 } RestorationInternal;
+
+static INLINE void set_default_sgrproj(SgrprojInfo *sgrproj_info) {
+  sgrproj_info->xqd[0] = (SGRPROJ_PRJ_MIN0 + SGRPROJ_PRJ_MAX0) / 2;
+  sgrproj_info->xqd[1] = (SGRPROJ_PRJ_MIN1 + SGRPROJ_PRJ_MAX1) / 2;
+}
+
+static INLINE void set_default_wiener(WienerInfo *wiener_info) {
+  wiener_info->vfilter[0] = wiener_info->hfilter[0] = WIENER_FILT_TAP0_MIDV;
+  wiener_info->vfilter[1] = wiener_info->hfilter[1] = WIENER_FILT_TAP1_MIDV;
+  wiener_info->vfilter[2] = wiener_info->hfilter[2] = WIENER_FILT_TAP2_MIDV;
+  wiener_info->vfilter[WIENER_HALFWIN] = wiener_info->hfilter[WIENER_HALFWIN] =
+      -2 *
+      (WIENER_FILT_TAP2_MIDV + WIENER_FILT_TAP1_MIDV + WIENER_FILT_TAP0_MIDV);
+  wiener_info->vfilter[4] = wiener_info->hfilter[4] = WIENER_FILT_TAP2_MIDV;
+  wiener_info->vfilter[5] = wiener_info->hfilter[5] = WIENER_FILT_TAP1_MIDV;
+  wiener_info->vfilter[6] = wiener_info->hfilter[6] = WIENER_FILT_TAP0_MIDV;
+}
 
 static INLINE int av1_get_rest_ntiles(int width, int height, int tilesize,
                                       int *tile_width, int *tile_height,
@@ -219,9 +249,9 @@ int av1_alloc_restoration_struct(struct AV1Common *cm,
 void av1_free_restoration_struct(RestorationInfo *rst_info);
 
 void extend_frame(uint8_t *data, int width, int height, int stride);
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 void extend_frame_highbd(uint16_t *data, int width, int height, int stride);
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
 void decode_xq(int *xqd, int *xq);
 void av1_loop_restoration_frame(YV12_BUFFER_CONFIG *frame, struct AV1Common *cm,
                                 RestorationInfo *rsi, int components_pattern,

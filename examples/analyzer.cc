@@ -16,7 +16,7 @@
 #include "./video_reader.h"
 #include "aom/aom_decoder.h"
 #include "aom/aomdx.h"
-#include "av1/common/accounting.h"
+#include "av1/decoder/accounting.h"
 #include "av1/common/onyxc_int.h"
 #include "av1/decoder/inspection.h"
 
@@ -43,6 +43,7 @@ class AV1Decoder {
   insp_frame_data frame_data;
 
   aom_codec_ctx_t codec;
+  bool show_padding;
 
  public:
   aom_image_t *image;
@@ -57,6 +58,9 @@ class AV1Decoder {
   void close();
   bool step();
 
+  int getWidthPadding() const;
+  int getHeightPadding() const;
+  void togglePadding();
   int getWidth() const;
   int getHeight() const;
 
@@ -67,9 +71,12 @@ class AV1Decoder {
 };
 
 AV1Decoder::AV1Decoder()
-    : reader(NULL), info(NULL), decoder(NULL), image(NULL), frame(0) {}
+    : reader(NULL), info(NULL), decoder(NULL), show_padding(false), image(NULL),
+      frame(0) {}
 
 AV1Decoder::~AV1Decoder() {}
+
+void AV1Decoder::togglePadding() { show_padding = !show_padding; }
 
 bool AV1Decoder::open(const wxString &path) {
   reader = aom_video_reader_open(path.mb_str());
@@ -117,9 +124,29 @@ bool AV1Decoder::step() {
   return false;
 }
 
-int AV1Decoder::getWidth() const { return info->frame_width; }
+int AV1Decoder::getWidth() const {
+  return info->frame_width + 2 * getWidthPadding();
+}
 
-int AV1Decoder::getHeight() const { return info->frame_height; }
+int AV1Decoder::getWidthPadding() const {
+  return show_padding
+             ? AOMMAX(info->frame_width + 16,
+                      ALIGN_POWER_OF_TWO(info->frame_width, 6)) -
+                   info->frame_width
+             : 0;
+}
+
+int AV1Decoder::getHeight() const {
+  return info->frame_height + 2 * getHeightPadding();
+}
+
+int AV1Decoder::getHeightPadding() const {
+  return show_padding
+             ? AOMMAX(info->frame_height + 16,
+                      ALIGN_POWER_OF_TWO(info->frame_height, 6)) -
+                   info->frame_height
+             : 0;
+}
 
 bool AV1Decoder::getAccountingStruct(Accounting **accounting) {
   return aom_codec_control(&codec, AV1_GET_ACCOUNTING, accounting) ==
@@ -173,6 +200,7 @@ class AnalyzerPanel : public wxPanel {
   bool open(const wxString &path);
   void close();
   void render();
+  void togglePadding();
   bool nextFrame();
   void refresh();
 
@@ -205,18 +233,31 @@ void AnalyzerPanel::setShowPlane(bool show_plane, int mask) {
 
 void AnalyzerPanel::render() {
   aom_image_t *img = decoder.image;
-  int y_stride = img->stride[0];
-  int cb_stride = img->stride[1];
-  int cr_stride = img->stride[2];
+  const int hbd = !!(img->fmt & AOM_IMG_FMT_HIGHBITDEPTH);
+  int y_stride = img->stride[0] >> hbd;
+  int cb_stride = img->stride[1] >> hbd;
+  int cr_stride = img->stride[2] >> hbd;
   int p_stride = 3 * getDisplayWidth();
   unsigned char *y_row = img->planes[0];
   unsigned char *cb_row = img->planes[1];
   unsigned char *cr_row = img->planes[2];
+  uint16_t *y_row16 = reinterpret_cast<uint16_t *>(y_row);
+  uint16_t *cb_row16 = reinterpret_cast<uint16_t *>(cb_row);
+  uint16_t *cr_row16 = reinterpret_cast<uint16_t *>(cr_row);
   unsigned char *p_row = pixels;
+  int y_width_padding = decoder.getWidthPadding();
+  int cb_width_padding = y_width_padding >> 1;
+  int cr_width_padding = y_width_padding >> 1;
+  int y_height_padding = decoder.getHeightPadding();
+  int cb_height_padding = y_height_padding >> 1;
+  int cr_height_padding = y_height_padding >> 1;
   for (int j = 0; j < decoder.getHeight(); j++) {
-    unsigned char *y = y_row;
-    unsigned char *cb = cb_row;
-    unsigned char *cr = cr_row;
+    unsigned char *y = y_row - y_stride * y_height_padding;
+    unsigned char *cb = cb_row - cb_stride * cb_height_padding;
+    unsigned char *cr = cr_row - cr_stride * cr_height_padding;
+    uint16_t *y16 = y_row16 - y_stride * y_height_padding;
+    uint16_t *cb16 = cb_row16 - cb_stride * cb_height_padding;
+    uint16_t *cr16 = cr_row16 - cr_stride * cr_height_padding;
     unsigned char *p = p_row;
     for (int i = 0; i < decoder.getWidth(); i++) {
       int64_t yval;
@@ -226,9 +267,15 @@ void AnalyzerPanel::render() {
       unsigned rval;
       unsigned gval;
       unsigned bval;
-      yval = *y;
-      cbval = *cb;
-      crval = *cr;
+      if (hbd) {
+        yval = *(y16 - y_width_padding);
+        cbval = *(cb16 - cb_width_padding);
+        crval = *(cr16 - cr_width_padding);
+      } else {
+        yval = *(y - y_width_padding);
+        cbval = *(cb - cb_width_padding);
+        crval = *(cr - cr_width_padding);
+      }
       pmask = plane_mask;
       if (pmask & OD_LUMA_MASK) {
         yval -= 16;
@@ -262,16 +309,29 @@ void AnalyzerPanel::render() {
         }
         px_row += p_stride;
       }
-      int dc = ((y - y_row) & 1) | (1 - img->x_chroma_shift);
-      y++;
-      cb += dc;
-      cr += dc;
+      if (hbd) {
+        int dc = ((y16 - y_row16) & 1) | (1 - img->x_chroma_shift);
+        y16++;
+        cb16 += dc;
+        cr16 += dc;
+      } else {
+        int dc = ((y - y_row) & 1) | (1 - img->x_chroma_shift);
+        y++;
+        cb += dc;
+        cr += dc;
+      }
       p += zoom * 3;
     }
     int dc = -((j & 1) | (1 - img->y_chroma_shift));
-    y_row += y_stride;
-    cb_row += dc & cb_stride;
-    cr_row += dc & cr_stride;
+    if (hbd) {
+      y_row16 += y_stride;
+      cb_row16 += dc & cb_stride;
+      cr_row16 += dc & cr_stride;
+    } else {
+      y_row += y_stride;
+      cb_row += dc & cb_stride;
+      cr_row += dc & cr_stride;
+    }
     p_row += zoom * p_stride;
   }
 }
@@ -302,6 +362,11 @@ void AnalyzerPanel::computeBitsPerPixel() {
     }
   }
   printf("\n");
+}
+
+void AnalyzerPanel::togglePadding() {
+  decoder.togglePadding();
+  updateDisplaySize();
 }
 
 bool AnalyzerPanel::nextFrame() {
@@ -407,9 +472,10 @@ class AnalyzerFrame : public wxFrame {
   void onClose(wxCommandEvent &event);  // NOLINT
   void onQuit(wxCommandEvent &event);   // NOLINT
 
-  void onZoomIn(wxCommandEvent &event);      // NOLINT
-  void onZoomOut(wxCommandEvent &event);     // NOLINT
-  void onActualSize(wxCommandEvent &event);  // NOLINT
+  void onTogglePadding(wxCommandEvent &event);  // NOLINT
+  void onZoomIn(wxCommandEvent &event);         // NOLINT
+  void onZoomOut(wxCommandEvent &event);        // NOLINT
+  void onActualSize(wxCommandEvent &event);     // NOLINT
 
   void onToggleViewMenuCheckBox(wxCommandEvent &event);          // NOLINT
   void onResetAndToggleViewMenuCheckBox(wxCommandEvent &event);  // NOLINT
@@ -432,13 +498,15 @@ enum {
   wxID_SHOW_V,
   wxID_GOTO_FRAME,
   wxID_RESTART,
-  wxID_ACTUAL_SIZE
+  wxID_ACTUAL_SIZE,
+  wxID_PADDING
 };
 
 BEGIN_EVENT_TABLE(AnalyzerFrame, wxFrame)
 EVT_MENU(wxID_OPEN, AnalyzerFrame::onOpen)
 EVT_MENU(wxID_CLOSE, AnalyzerFrame::onClose)
 EVT_MENU(wxID_EXIT, AnalyzerFrame::onQuit)
+EVT_MENU(wxID_PADDING, AnalyzerFrame::onTogglePadding)
 EVT_MENU(wxID_ZOOM_IN, AnalyzerFrame::onZoomIn)
 EVT_MENU(wxID_ZOOM_OUT, AnalyzerFrame::onZoomOut)
 EVT_MENU(wxID_ACTUAL_SIZE, AnalyzerFrame::onActualSize)
@@ -471,6 +539,8 @@ AnalyzerFrame::AnalyzerFrame(const bool bit_accounting)
   this->SetAcceleratorTable(accel);
 
   viewMenu = new wxMenu();
+  +viewMenu->Append(wxID_PADDING, _("Toggle padding\tCtrl-p"),
+                    _("Show padding"));
   viewMenu->Append(wxID_ZOOM_IN, _("Zoom-In\tCtrl-+"), _("Double image size"));
   viewMenu->Append(wxID_ZOOM_OUT, _("Zoom-Out\tCtrl--"), _("Half image size"));
   viewMenu->Append(wxID_ACTUAL_SIZE, _("Actual size\tCtrl-0"),
@@ -514,6 +584,13 @@ void AnalyzerFrame::onOpen(wxCommandEvent &WXUNUSED(event)) {
 void AnalyzerFrame::onClose(wxCommandEvent &WXUNUSED(event)) {}
 
 void AnalyzerFrame::onQuit(wxCommandEvent &WXUNUSED(event)) { Close(true); }
+
+void AnalyzerFrame::onTogglePadding(wxCommandEvent &WXUNUSED(event)) {
+  panel->togglePadding();
+  SetClientSize(panel->GetSize());
+  panel->render();
+  panel->Refresh();
+}
 
 void AnalyzerFrame::onZoomIn(wxCommandEvent &WXUNUSED(event)) {
   setZoom(panel->getZoom() + 1);

@@ -65,6 +65,10 @@ sub aom_config($) {
 }
 
 sub specialize {
+  if (@_ <= 1) {
+    die "'specialize' must be called with a function name and at least one ",
+        "architecture ('C' is implied): \n@_\n";
+  }
   my $fn=$_[0];
   shift;
   foreach my $opt (@_) {
@@ -378,12 +382,8 @@ if ($opts{arch} eq 'x86') {
   }
   close CONFIG_FILE;
   mips;
-} elsif ($opts{arch} eq 'armv6') {
-  @ALL_ARCHS = filter(qw/media/);
-  arm;
 } elsif ($opts{arch} =~ /armv7\w?/) {
-  @ALL_ARCHS = filter(qw/media neon_asm neon/);
-  @REQUIRES = filter(keys %required ? keys %required : qw/media/);
+  @ALL_ARCHS = filter(qw/neon_asm neon/);
   &require(@REQUIRES);
   arm;
 } elsif ($opts{arch} eq 'armv8' || $opts{arch} eq 'arm64' ) {

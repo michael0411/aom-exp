@@ -32,17 +32,15 @@
 // Border over which to compute the global motion
 #define ERRORADV_BORDER 0
 
-const double gm_advantage_thresh[TRANS_TYPES] = {
-  1.00,  // Identity (not used)
-  0.85,  // Translation
-  0.75,  // Rot zoom
-  0.65,  // Affine
-  0.65,  // Hor Trapezoid
-  0.65,  // Ver Trapezoid
-  0.50,  // Homography
-};
+#define ERRORADV_MAX_THRESH 0.995
+#define ERRORADV_COST_PRODUCT_THRESH 26000
 
-void convert_to_params(const double *params, int32_t *model) {
+int is_enough_erroradvantage(double best_erroradvantage, int params_cost) {
+  return best_erroradvantage < ERRORADV_MAX_THRESH &&
+         best_erroradvantage * params_cost < ERRORADV_COST_PRODUCT_THRESH;
+}
+
+static void convert_to_params(const double *params, int32_t *model) {
   int i;
   int alpha_present = 0;
   model[0] = (int32_t)floor(params[0] * (1 << GM_TRANS_PREC_BITS) + 0.5);
@@ -83,7 +81,8 @@ void convert_model_to_params(const double *params, WarpedMotionParams *model) {
 // Adds some offset to a global motion parameter and handles
 // all of the necessary precision shifts, clamping, and
 // zero-centering.
-int32_t add_param_offset(int param_index, int32_t param_value, int32_t offset) {
+static int32_t add_param_offset(int param_index, int32_t param_value,
+                                int32_t offset) {
   const int scale_vals[3] = { GM_TRANS_PREC_DIFF, GM_ALPHA_PREC_DIFF,
                               GM_ROW3HOMO_PREC_DIFF };
   const int clamp_vals[3] = { GM_TRANS_MAX, GM_ALPHA_MAX, GM_ROW3HOMO_MAX };
@@ -109,7 +108,7 @@ int32_t add_param_offset(int param_index, int32_t param_value, int32_t offset) {
   return param_value + (is_one_centered << WARPEDMODEL_PREC_BITS);
 }
 
-void force_wmtype(WarpedMotionParams *wm, TransformationType wmtype) {
+static void force_wmtype(WarpedMotionParams *wm, TransformationType wmtype) {
   switch (wmtype) {
     case IDENTITY: wm->wmmat[0] = 0; wm->wmmat[1] = 0;
     case TRANSLATION:
@@ -125,14 +124,15 @@ void force_wmtype(WarpedMotionParams *wm, TransformationType wmtype) {
   wm->wmtype = wmtype;
 }
 
-double refine_integerized_param(WarpedMotionParams *wm,
-                                TransformationType wmtype,
-#if CONFIG_AOM_HIGHBITDEPTH
-                                int use_hbd, int bd,
-#endif  // CONFIG_AOM_HIGHBITDEPTH
-                                uint8_t *ref, int r_width, int r_height,
-                                int r_stride, uint8_t *dst, int d_width,
-                                int d_height, int d_stride, int n_refinements) {
+int64_t refine_integerized_param(WarpedMotionParams *wm,
+                                 TransformationType wmtype,
+#if CONFIG_HIGHBITDEPTH
+                                 int use_hbd, int bd,
+#endif  // CONFIG_HIGHBITDEPTH
+                                 uint8_t *ref, int r_width, int r_height,
+                                 int r_stride, uint8_t *dst, int d_width,
+                                 int d_height, int d_stride, int n_refinements,
+                                 int64_t best_frame_error) {
   static const int max_trans_model_params[TRANS_TYPES] = {
     0, 2, 4, 6, 8, 8, 8
   };
@@ -140,23 +140,23 @@ double refine_integerized_param(WarpedMotionParams *wm,
   int i = 0, p;
   int n_params = max_trans_model_params[wmtype];
   int32_t *param_mat = wm->wmmat;
-  double step_error;
+  int64_t step_error, best_error;
   int32_t step;
   int32_t *param;
   int32_t curr_param;
   int32_t best_param;
-  double best_error;
 
   force_wmtype(wm, wmtype);
-  best_error = av1_warp_erroradv(wm,
-#if CONFIG_AOM_HIGHBITDEPTH
-                                 use_hbd, bd,
-#endif  // CONFIG_AOM_HIGHBITDEPTH
-                                 ref, r_width, r_height, r_stride,
-                                 dst + border * d_stride + border, border,
-                                 border, d_width - 2 * border,
-                                 d_height - 2 * border, d_stride, 0, 0, 16, 16);
-  step = 1 << (n_refinements + 1);
+  best_error = av1_warp_error(
+      wm,
+#if CONFIG_HIGHBITDEPTH
+      use_hbd, bd,
+#endif  // CONFIG_HIGHBITDEPTH
+      ref, r_width, r_height, r_stride, dst + border * d_stride + border,
+      border, border, d_width - 2 * border, d_height - 2 * border, d_stride, 0,
+      0, SCALE_SUBPEL_SHIFTS, SCALE_SUBPEL_SHIFTS, best_frame_error);
+  best_error = AOMMIN(best_error, best_frame_error);
+  step = 1 << (n_refinements - 1);
   for (i = 0; i < n_refinements; i++, step >>= 1) {
     for (p = 0; p < n_params; ++p) {
       int step_dir = 0;
@@ -168,14 +168,14 @@ double refine_integerized_param(WarpedMotionParams *wm,
       best_param = curr_param;
       // look to the left
       *param = add_param_offset(p, curr_param, -step);
-      step_error = av1_warp_erroradv(
+      step_error = av1_warp_error(
           wm,
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
           use_hbd, bd,
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
           ref, r_width, r_height, r_stride, dst + border * d_stride + border,
           border, border, d_width - 2 * border, d_height - 2 * border, d_stride,
-          0, 0, 16, 16);
+          0, 0, SCALE_SUBPEL_SHIFTS, SCALE_SUBPEL_SHIFTS, best_error);
       if (step_error < best_error) {
         best_error = step_error;
         best_param = *param;
@@ -184,14 +184,14 @@ double refine_integerized_param(WarpedMotionParams *wm,
 
       // look to the right
       *param = add_param_offset(p, curr_param, step);
-      step_error = av1_warp_erroradv(
+      step_error = av1_warp_error(
           wm,
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
           use_hbd, bd,
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
           ref, r_width, r_height, r_stride, dst + border * d_stride + border,
           border, border, d_width - 2 * border, d_height - 2 * border, d_stride,
-          0, 0, 16, 16);
+          0, 0, SCALE_SUBPEL_SHIFTS, SCALE_SUBPEL_SHIFTS, best_error);
       if (step_error < best_error) {
         best_error = step_error;
         best_param = *param;
@@ -203,14 +203,15 @@ double refine_integerized_param(WarpedMotionParams *wm,
       // for the biggest step size
       while (step_dir) {
         *param = add_param_offset(p, best_param, step * step_dir);
-        step_error = av1_warp_erroradv(
+        step_error = av1_warp_error(
             wm,
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
             use_hbd, bd,
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#endif  // CONFIG_HIGHBITDEPTH
             ref, r_width, r_height, r_stride, dst + border * d_stride + border,
             border, border, d_width - 2 * border, d_height - 2 * border,
-            d_stride, 0, 0, 16, 16);
+            d_stride, 0, 0, SCALE_SUBPEL_SHIFTS, SCALE_SUBPEL_SHIFTS,
+            best_error);
         if (step_error < best_error) {
           best_error = step_error;
           best_param = *param;
@@ -238,68 +239,49 @@ static INLINE RansacFunc get_ransac_type(TransformationType type) {
   }
 }
 
-// computes global motion parameters by fitting a model using RANSAC
-static int compute_global_motion_params(TransformationType type,
-                                        int *correspondences,
-                                        int num_correspondences,
-                                        double *params) {
-  int result;
-  int num_inliers = 0;
-  RansacFunc ransac = get_ransac_type(type);
-  if (ransac == NULL) return 0;
-
-  result = ransac(correspondences, num_correspondences, &num_inliers, params);
-  if (!result && num_inliers < MIN_INLIER_PROB * num_correspondences) {
-    result = 1;
-    num_inliers = 0;
-  }
-  return num_inliers;
-}
-
-#if CONFIG_AOM_HIGHBITDEPTH
-unsigned char *downconvert_frame(YV12_BUFFER_CONFIG *frm, int bit_depth) {
+#if CONFIG_HIGHBITDEPTH
+static unsigned char *downconvert_frame(YV12_BUFFER_CONFIG *frm,
+                                        int bit_depth) {
   int i, j;
   uint16_t *orig_buf = CONVERT_TO_SHORTPTR(frm->y_buffer);
-  uint8_t *buf = malloc(frm->y_height * frm->y_stride * sizeof(*buf));
-
-  for (i = 0; i < frm->y_height; ++i)
-    for (j = 0; j < frm->y_width; ++j)
-      buf[i * frm->y_stride + j] =
-          orig_buf[i * frm->y_stride + j] >> (bit_depth - 8);
-
-  return buf;
+  uint8_t *buf_8bit = frm->y_buffer_8bit;
+  assert(buf_8bit);
+  if (!frm->buf_8bit_valid) {
+    for (i = 0; i < frm->y_height; ++i) {
+      for (j = 0; j < frm->y_width; ++j) {
+        buf_8bit[i * frm->y_stride + j] =
+            orig_buf[i * frm->y_stride + j] >> (bit_depth - 8);
+      }
+    }
+    frm->buf_8bit_valid = 1;
+  }
+  return buf_8bit;
 }
 #endif
 
-int compute_global_motion_feature_based(TransformationType type,
-                                        YV12_BUFFER_CONFIG *frm,
-                                        YV12_BUFFER_CONFIG *ref,
-#if CONFIG_AOM_HIGHBITDEPTH
-                                        int bit_depth,
+int compute_global_motion_feature_based(
+    TransformationType type, YV12_BUFFER_CONFIG *frm, YV12_BUFFER_CONFIG *ref,
+#if CONFIG_HIGHBITDEPTH
+    int bit_depth,
 #endif
-                                        double *params) {
+    int *num_inliers_by_motion, double *params_by_motion, int num_motions) {
+  int i;
   int num_frm_corners, num_ref_corners;
   int num_correspondences;
   int *correspondences;
-  int num_inliers;
   int frm_corners[2 * MAX_CORNERS], ref_corners[2 * MAX_CORNERS];
   unsigned char *frm_buffer = frm->y_buffer;
   unsigned char *ref_buffer = ref->y_buffer;
+  RansacFunc ransac = get_ransac_type(type);
 
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
   if (frm->flags & YV12_FLAG_HIGHBITDEPTH) {
     // The frame buffer is 16-bit, so we need to convert to 8 bits for the
     // following code. We cache the result until the frame is released.
-    if (frm->y_buffer_8bit)
-      frm_buffer = frm->y_buffer_8bit;
-    else
-      frm_buffer = frm->y_buffer_8bit = downconvert_frame(frm, bit_depth);
+    frm_buffer = downconvert_frame(frm, bit_depth);
   }
   if (ref->flags & YV12_FLAG_HIGHBITDEPTH) {
-    if (ref->y_buffer_8bit)
-      ref_buffer = ref->y_buffer_8bit;
-    else
-      ref_buffer = ref->y_buffer_8bit = downconvert_frame(ref, bit_depth);
+    ref_buffer = downconvert_frame(ref, bit_depth);
   }
 #endif
 
@@ -317,8 +299,21 @@ int compute_global_motion_feature_based(TransformationType type,
       (int *)ref_corners, num_ref_corners, frm->y_width, frm->y_height,
       frm->y_stride, ref->y_stride, correspondences);
 
-  num_inliers = compute_global_motion_params(type, correspondences,
-                                             num_correspondences, params);
+  ransac(correspondences, num_correspondences, num_inliers_by_motion,
+         params_by_motion, num_motions);
+
   free(correspondences);
-  return (num_inliers > 0);
+
+  // Set num_inliers = 0 for motions with too few inliers so they are ignored.
+  for (i = 0; i < num_motions; ++i) {
+    if (num_inliers_by_motion[i] < MIN_INLIER_PROB * num_correspondences) {
+      num_inliers_by_motion[i] = 0;
+    }
+  }
+
+  // Return true if any one of the motions has inliers.
+  for (i = 0; i < num_motions; ++i) {
+    if (num_inliers_by_motion[i] > 0) return 1;
+  }
+  return 0;
 }

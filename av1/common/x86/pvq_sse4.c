@@ -33,7 +33,7 @@ static __m128i horizontal_sum_epi32(__m128i x) {
   return x;
 }
 
-static inline float rsqrtf(float x) {
+static INLINE float rsqrtf(float x) {
   float y;
   _mm_store_ss(&y, _mm_rsqrt_ss(_mm_load_ss(&x)));
   return y;
@@ -181,6 +181,8 @@ double pvq_search_rdo_double_sse4_1(const od_val16 *xcoeff, int n, int k,
       count = _mm_add_ps(count, _mm_set_ps(4, 4, 4, 4));
     }
   }
+  lambda_delta_rate[n] = lambda_delta_rate[n + 1] = lambda_delta_rate[n + 2] =
+      1e30f;
 
   for (i = 0; i < pulses_left; i++) {
     int best_id = 0;

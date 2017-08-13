@@ -240,6 +240,15 @@ SIMD_INLINE c_v64 c_v64_ssub_s16(c_v64 a, c_v64 b) {
   return t;
 }
 
+SIMD_INLINE c_v64 c_v64_ssub_u16(c_v64 a, c_v64 b) {
+  c_v64 t;
+  int c;
+  for (c = 0; c < 4; c++)
+    t.u16[c] =
+        (int32_t)a.u16[c] - (int32_t)b.u16[c] < 0 ? 0 : a.u16[c] - b.u16[c];
+  return t;
+}
+
 SIMD_INLINE c_v64 c_v64_sub_32(c_v64 a, c_v64 b) {
   c_v64 t;
   t.u32[0] = (uint32_t)((int64_t)a.u32[0] - b.u32[0]);
@@ -252,6 +261,13 @@ SIMD_INLINE c_v64 c_v64_abs_s16(c_v64 a) {
   int c;
   for (c = 0; c < 4; c++)
     t.u16[c] = (int16_t)a.u16[c] > 0 ? a.u16[c] : -a.u16[c];
+  return t;
+}
+
+SIMD_INLINE c_v64 c_v64_abs_s8(c_v64 a) {
+  c_v64 t;
+  int c;
+  for (c = 0; c < 8; c++) t.u8[c] = (int8_t)a.u8[c] > 0 ? a.u8[c] : -a.u8[c];
   return t;
 }
 
@@ -406,6 +422,26 @@ SIMD_INLINE c_v64 c_v64_unpackhi_u8_s16(c_v64 a) {
   t.s16[2] = (int16_t)a.u8[6 - endian];
   t.s16[1] = (int16_t)a.u8[5 - endian];
   t.s16[0] = (int16_t)a.u8[4 - endian];
+  return t;
+}
+
+SIMD_INLINE c_v64 c_v64_unpacklo_s8_s16(c_v64 a) {
+  c_v64 t;
+  int endian = !!CONFIG_BIG_ENDIAN * 4;
+  t.s16[3] = (int16_t)a.s8[3 + endian];
+  t.s16[2] = (int16_t)a.s8[2 + endian];
+  t.s16[1] = (int16_t)a.s8[1 + endian];
+  t.s16[0] = (int16_t)a.s8[0 + endian];
+  return t;
+}
+
+SIMD_INLINE c_v64 c_v64_unpackhi_s8_s16(c_v64 a) {
+  c_v64 t;
+  int endian = !!CONFIG_BIG_ENDIAN * 4;
+  t.s16[3] = (int16_t)a.s8[7 - endian];
+  t.s16[2] = (int16_t)a.s8[6 - endian];
+  t.s16[1] = (int16_t)a.s8[5 - endian];
+  t.s16[0] = (int16_t)a.s8[4 - endian];
   return t;
 }
 
@@ -824,19 +860,19 @@ SIMD_INLINE c_v64 c_v64_shr_s32(c_v64 a, unsigned int n) {
   return t;
 }
 
-SIMD_INLINE c_v64 c_v64_shr_n_byte(c_v64 x, const unsigned int i) {
+SIMD_INLINE c_v64 c_v64_shr_n_byte(c_v64 x, unsigned int i) {
   c_v64 t;
   t.u64 = x.u64 >> i * 8;
   return t;
 }
 
-SIMD_INLINE c_v64 c_v64_shl_n_byte(c_v64 x, const unsigned int i) {
+SIMD_INLINE c_v64 c_v64_shl_n_byte(c_v64 x, unsigned int i) {
   c_v64 t;
   t.u64 = x.u64 << i * 8;
   return t;
 }
 
-SIMD_INLINE c_v64 c_v64_align(c_v64 a, c_v64 b, const unsigned int c) {
+SIMD_INLINE c_v64 c_v64_align(c_v64 a, c_v64 b, unsigned int c) {
   if (SIMD_CHECK && c > 7) {
     fprintf(stderr, "Error: undefined alignment %d\n", c);
     abort();
@@ -844,39 +880,39 @@ SIMD_INLINE c_v64 c_v64_align(c_v64 a, c_v64 b, const unsigned int c) {
   return c ? c_v64_or(c_v64_shr_n_byte(b, c), c_v64_shl_n_byte(a, 8 - c)) : b;
 }
 
-SIMD_INLINE c_v64 c_v64_shl_n_8(c_v64 a, const unsigned int c) {
+SIMD_INLINE c_v64 c_v64_shl_n_8(c_v64 a, unsigned int c) {
   return c_v64_shl_8(a, c);
 }
 
-SIMD_INLINE c_v64 c_v64_shr_n_u8(c_v64 a, const unsigned int c) {
+SIMD_INLINE c_v64 c_v64_shr_n_u8(c_v64 a, unsigned int c) {
   return c_v64_shr_u8(a, c);
 }
 
-SIMD_INLINE c_v64 c_v64_shr_n_s8(c_v64 a, const unsigned int c) {
+SIMD_INLINE c_v64 c_v64_shr_n_s8(c_v64 a, unsigned int c) {
   return c_v64_shr_s8(a, c);
 }
 
-SIMD_INLINE c_v64 c_v64_shl_n_16(c_v64 a, const unsigned int c) {
+SIMD_INLINE c_v64 c_v64_shl_n_16(c_v64 a, unsigned int c) {
   return c_v64_shl_16(a, c);
 }
 
-SIMD_INLINE c_v64 c_v64_shr_n_u16(c_v64 a, const unsigned int c) {
+SIMD_INLINE c_v64 c_v64_shr_n_u16(c_v64 a, unsigned int c) {
   return c_v64_shr_u16(a, c);
 }
 
-SIMD_INLINE c_v64 c_v64_shr_n_s16(c_v64 a, const unsigned int c) {
+SIMD_INLINE c_v64 c_v64_shr_n_s16(c_v64 a, unsigned int c) {
   return c_v64_shr_s16(a, c);
 }
 
-SIMD_INLINE c_v64 c_v64_shl_n_32(c_v64 a, const unsigned int c) {
+SIMD_INLINE c_v64 c_v64_shl_n_32(c_v64 a, unsigned int c) {
   return c_v64_shl_32(a, c);
 }
 
-SIMD_INLINE c_v64 c_v64_shr_n_u32(c_v64 a, const unsigned int c) {
+SIMD_INLINE c_v64 c_v64_shr_n_u32(c_v64 a, unsigned int c) {
   return c_v64_shr_u32(a, c);
 }
 
-SIMD_INLINE c_v64 c_v64_shr_n_s32(c_v64 a, const unsigned int c) {
+SIMD_INLINE c_v64 c_v64_shr_n_s32(c_v64 a, unsigned int c) {
   return c_v64_shr_s32(a, c);
 }
 

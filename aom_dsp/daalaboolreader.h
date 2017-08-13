@@ -16,7 +16,7 @@
 #include "aom_dsp/entdec.h"
 #include "aom_dsp/prob.h"
 #if CONFIG_ACCOUNTING
-#include "av1/common/accounting.h"
+#include "av1/decoder/accounting.h"
 #endif
 #if CONFIG_BITSTREAM_DEBUG
 #include <stdio.h>
@@ -45,7 +45,11 @@ uint32_t aom_daala_reader_tell_frac(const daala_reader *r);
 
 static INLINE int aom_daala_read(daala_reader *r, int prob) {
   int bit;
-  int p = ((prob << 15) + (256 - prob)) >> 8;
+#if CONFIG_EC_SMALLMUL
+  int p = (0x7FFFFF - (prob << 15) + prob) >> 8;
+#else
+  int p = ((prob << 15) + 256 - prob) >> 8;
+#endif
 #if CONFIG_BITSTREAM_DEBUG
 /*{
   const int queue_r = bitstream_queue_get_read();
@@ -108,7 +112,8 @@ static INLINE int aom_daala_reader_has_error(daala_reader *r) {
 
 static INLINE int daala_read_symbol(daala_reader *r, const aom_cdf_prob *cdf,
                                     int nsymbs) {
-  int symb = od_ec_decode_cdf_q15(&r->ec, cdf, nsymbs);
+  int symb;
+  symb = od_ec_decode_cdf_q15(&r->ec, cdf, nsymbs);
 
 #if CONFIG_BITSTREAM_DEBUG
   {

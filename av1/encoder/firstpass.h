@@ -52,6 +52,13 @@ typedef struct {
 #define MIN_EXT_ARF_INTERVAL 4
 #endif  // CONFIG_EXT_REFS
 
+#if CONFIG_FLEX_REFS
+#define MIN_ZERO_MOTION 0.95
+#define MAX_SR_CODED_ERROR 40
+#define MAX_RAW_ERR_VAR 2000
+#define MIN_MV_IN_OUT 0.4
+#endif  // CONFIG_FLEX_REFS
+
 #define VLOW_MOTION_THRESHOLD 950
 
 typedef struct {
@@ -77,6 +84,10 @@ typedef struct {
   double new_mv_count;
   double duration;
   double count;
+#if CONFIG_FLEX_REFS
+  // standard deviation for (0, 0) motion prediction error
+  double raw_error_stdev;
+#endif  // CONFIG_FLEX_REFS
 } FIRSTPASS_STATS;
 
 typedef enum {
@@ -90,8 +101,13 @@ typedef enum {
   LAST_BIPRED_UPDATE = 6,    // Last Bi-predictive Frame
   BIPRED_UPDATE = 7,         // Bi-predictive Frame, but not the last one
   INTNL_OVERLAY_UPDATE = 8,  // Internal Overlay Frame
+#if CONFIG_ALTREF2
+  INTNL_ARF_UPDATE = 9,  // Internal Altref Frame (candidate for ALTREF2)
+  FRAME_UPDATE_TYPES = 10
+#else   // !CONFIG_ALTREF2
   FRAME_UPDATE_TYPES = 9
-#else
+#endif  // CONFIG_ALTREF2
+#else   // !CONFIG_EXT_REFS
   FRAME_UPDATE_TYPES = 5
 #endif  // CONFIG_EXT_REFS
 } FRAME_UPDATE_TYPE;
@@ -176,11 +192,6 @@ void av1_twopass_postencode_update(struct AV1_COMP *cpi);
 
 // Post encode update of the rate control parameters for 2-pass
 void av1_twopass_postencode_update(struct AV1_COMP *cpi);
-
-void av1_init_subsampling(struct AV1_COMP *cpi);
-
-void av1_calculate_coded_size(struct AV1_COMP *cpi, int *scaled_frame_width,
-                              int *scaled_frame_height);
 
 #if CONFIG_EXT_REFS
 static INLINE int get_number_of_extra_arfs(int interval, int arf_pending) {

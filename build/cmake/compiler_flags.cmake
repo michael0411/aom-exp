@@ -8,8 +8,12 @@
 ## Media Patent License 1.0 was not distributed with this source code in the
 ## PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 ##
+if (NOT AOM_BUILD_CMAKE_COMPILER_FLAGS_CMAKE_)
+set(AOM_BUILD_CMAKE_COMPILER_FLAGS_CMAKE_ 1)
+
 include(CheckCCompilerFlag)
 include(CheckCXXCompilerFlag)
+include("${AOM_ROOT}/build/cmake/compiler_tests.cmake")
 
 # Strings used to cache failed C/CXX flags.
 set(AOM_FAILED_C_FLAGS)
@@ -110,7 +114,7 @@ endfunction ()
 
 # Checks for support of $flag by both the C and CXX compilers. Terminates
 # generation when support is not present in both compilers.
-function (require_flag flag update_cmake_flags)
+function (require_compiler_flag flag update_cmake_flags)
   require_c_flag(${flag} ${update_cmake_flags})
   require_cxx_flag(${flag} ${update_cmake_flags})
 endfunction ()
@@ -134,7 +138,7 @@ endfunction ()
 # Checks only non-MSVC targets for support of $flag by both the C and CXX
 # compilers. Terminates generation when support is not present in both
 # compilers.
-function (require_flag_nomsvc flag update_cmake_flags)
+function (require_compiler_flag_nomsvc flag update_cmake_flags)
   require_c_flag_nomsvc(${flag} ${update_cmake_flags})
   require_cxx_flag_nomsvc(${flag} ${update_cmake_flags})
 endfunction ()
@@ -216,3 +220,40 @@ function (append_exe_linker_flag flag)
         "" FORCE)
   endif ()
 endfunction ()
+
+# Adds $flag to the link flags for $target.
+function (append_link_flag_to_target target flags)
+  unset(target_link_flags)
+  get_target_property(target_link_flags ${target} LINK_FLAGS)
+
+  if (target_link_flags)
+    unset(link_flag_found)
+    string(FIND "${target_link_flags}" "${flags}" link_flag_found)
+
+    if (NOT ${link_flag_found} EQUAL -1)
+      return()
+    endif ()
+
+    set(target_link_flags "${target_link_flags} ${flags}")
+  else ()
+    set(target_link_flags "${flags}")
+  endif ()
+
+  set_target_properties(${target} PROPERTIES LINK_FLAGS ${target_link_flags})
+endfunction ()
+
+# Adds $flag to executable linker flags, and makes sure C/CXX builds still work.
+function (require_linker_flag flag)
+  append_exe_linker_flag(${flag})
+
+  unset(c_passed)
+  aom_check_c_compiles("LINKER_FLAG_C_TEST(${flag})" "" c_passed)
+  unset(cxx_passed)
+  aom_check_cxx_compiles("LINKER_FLAG_CXX_TEST(${flag})" "" cxx_passed)
+
+  if (NOT c_passed OR NOT cxx_passed)
+    message(FATAL_ERROR "Linker flag test for ${flag} failed.")
+  endif ()
+endfunction ()
+
+endif ()  # AOM_BUILD_CMAKE_COMPILER_FLAGS_CMAKE_

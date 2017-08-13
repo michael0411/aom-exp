@@ -17,8 +17,9 @@
 #include "aom/aom_integer.h"
 
 #include "aom_dsp/aom_dsp_common.h"
-#include "aom_dsp/x86/synonyms.h"
 #include "aom_dsp/aom_filter.h"
+#include "aom_dsp/x86/obmc_intrinsic_ssse3.h"
+#include "aom_dsp/x86/synonyms.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 // 8 bit
@@ -124,7 +125,7 @@ static INLINE void obmc_variance_w8n(const uint8_t *pre, const int pre_stride,
     } else {                                                           \
       obmc_variance_w8n(pre, pre_stride, wsrc, mask, sse, &sum, W, H); \
     }                                                                  \
-    return *sse - (((int64_t)sum * sum) / (W * H));                    \
+    return *sse - (unsigned int)(((int64_t)sum * sum) / (W * H));      \
   }
 
 #if CONFIG_EXT_PARTITION
@@ -145,12 +146,20 @@ OBMCVARWXH(8, 8)
 OBMCVARWXH(8, 4)
 OBMCVARWXH(4, 8)
 OBMCVARWXH(4, 4)
+#if CONFIG_EXT_PARTITION_TYPES
+OBMCVARWXH(4, 16)
+OBMCVARWXH(16, 4)
+OBMCVARWXH(8, 32)
+OBMCVARWXH(32, 8)
+OBMCVARWXH(16, 64)
+OBMCVARWXH(64, 16)
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 // High bit-depth
 ////////////////////////////////////////////////////////////////////////////////
 
-#if CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_HIGHBITDEPTH
 static INLINE void hbd_obmc_variance_w4(
     const uint8_t *pre8, const int pre_stride, const int32_t *wsrc,
     const int32_t *mask, uint64_t *const sse, int64_t *const sum, const int h) {
@@ -311,23 +320,27 @@ static INLINE void highbd_12_obmc_variance(const uint8_t *pre8, int pre_stride,
       const int32_t *mask, unsigned int *sse) {                            \
     int sum;                                                               \
     highbd_obmc_variance(pre, pre_stride, wsrc, mask, W, H, sse, &sum);    \
-    return *sse - (((int64_t)sum * sum) / (W * H));                        \
+    return *sse - (unsigned int)(((int64_t)sum * sum) / (W * H));          \
   }                                                                        \
                                                                            \
   unsigned int aom_highbd_10_obmc_variance##W##x##H##_sse4_1(              \
       const uint8_t *pre, int pre_stride, const int32_t *wsrc,             \
       const int32_t *mask, unsigned int *sse) {                            \
     int sum;                                                               \
+    int64_t var;                                                           \
     highbd_10_obmc_variance(pre, pre_stride, wsrc, mask, W, H, sse, &sum); \
-    return *sse - (((int64_t)sum * sum) / (W * H));                        \
+    var = (int64_t)(*sse) - (((int64_t)sum * sum) / (W * H));              \
+    return (var >= 0) ? (uint32_t)var : 0;                                 \
   }                                                                        \
                                                                            \
   unsigned int aom_highbd_12_obmc_variance##W##x##H##_sse4_1(              \
       const uint8_t *pre, int pre_stride, const int32_t *wsrc,             \
       const int32_t *mask, unsigned int *sse) {                            \
     int sum;                                                               \
+    int64_t var;                                                           \
     highbd_12_obmc_variance(pre, pre_stride, wsrc, mask, W, H, sse, &sum); \
-    return *sse - (((int64_t)sum * sum) / (W * H));                        \
+    var = (int64_t)(*sse) - (((int64_t)sum * sum) / (W * H));              \
+    return (var >= 0) ? (uint32_t)var : 0;                                 \
   }
 
 #if CONFIG_EXT_PARTITION
@@ -348,4 +361,12 @@ HBD_OBMCVARWXH(8, 8)
 HBD_OBMCVARWXH(8, 4)
 HBD_OBMCVARWXH(4, 8)
 HBD_OBMCVARWXH(4, 4)
-#endif  // CONFIG_AOM_HIGHBITDEPTH
+#if CONFIG_EXT_PARTITION_TYPES
+HBD_OBMCVARWXH(4, 16)
+HBD_OBMCVARWXH(16, 4)
+HBD_OBMCVARWXH(8, 32)
+HBD_OBMCVARWXH(32, 8)
+HBD_OBMCVARWXH(16, 64)
+HBD_OBMCVARWXH(64, 16)
+#endif
+#endif  // CONFIG_HIGHBITDEPTH
